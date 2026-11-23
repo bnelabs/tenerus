@@ -73,7 +73,7 @@ impl MarketApp {
         };
         let mut open = true;
         let size = match page {
-            InfoPage::About => vec2(560., 470.),
+            InfoPage::About => vec2(600., 540.),
             _ => vec2(535., 360.),
         };
         dialog_window(ctx, page.title(), size)
@@ -83,7 +83,7 @@ impl MarketApp {
             .vscroll(true)
             .show(ctx, |ui| match page {
                 InfoPage::About => {
-                    ui.label(display_text("Tenerus", 30., p.text));
+                    ui.label(display_text("Tenerus", 28., p.text));
                     let platform = match std::env::consts::OS {
                         "macos" => "macOS",
                         "windows" => "Windows",
@@ -94,7 +94,7 @@ impl MarketApp {
                     text(
                         ui,
                         format!(
-                            "Version {} · {} ({})",
+                            "Version {} · {} ({}) · MIT License",
                             env!("CARGO_PKG_VERSION"),
                             platform,
                             std::env::consts::ARCH
@@ -102,33 +102,40 @@ impl MarketApp {
                         12.,
                         p.blue,
                     );
-                    ui.add_space(12.);
+                    ui.add_space(8.);
                     text(
                         ui,
-                        "An independent native desktop workspace for macOS, Windows, Linux, and FreeBSD — follow markets, explore comparable historical periods, and run configurable AI research.",
-                        14.,
+                        "An independent, local-first native Rust desktop workspace for macOS, Windows, Linux, and FreeBSD — built to study historical price distributions, test calibrated statistical ranges out-of-sample, and audit AI commentary against transparent baselines.",
+                        13.,
                         p.text,
                     );
-                    ui.add_space(12.);
+                    ui.add_space(10.);
                     info_section(
                         ui,
                         p,
                         "Educational use only",
-                        "Tenerus is provided solely for education and research. It is not financial advice, cannot place orders, and should not be used for real investment or trading decisions.",
+                        "Provided solely for education and research. Nothing in Tenerus is financial advice or a forecast guarantee. It has no brokerage access and should not be used for real trading or investing.",
                     );
                     info_section(
                         ui,
                         p,
-                        "Market data",
-                        "Yahoo Finance supplies public prices and headlines. Outlook can use daily closes from Twelve Data, Alpha Vantage, a local CSV/JSON file, or your own HTTPS/localhost data service.",
+                        "Quantitative modeling & opt-in pilots",
+                        "Outlook blends four strictly causal local models (kernel analogs with S&P 500 regime, online quantile regression with daily news ablation, mean-reverting GARCH(1,1), and an unconditional baseline) via walk-forward pinball-loss weights and split-conformal 80% calibration. Opt-in local TimesFM and Chronos-2 pilots run on user-installed Python runtimes and score side-by-side against Outlook.",
                     );
                     info_section(
                         ui,
                         p,
-                        "Research and storage",
-                        "Watchlists, imports, prediction logs, and saved research stay locally on this device. When you request AI research, the app sends the relevant context directly to the provider or local CLI you choose.",
+                        "Market data & AI boundaries",
+                        "Quotes, OHLCV closes, and headlines load directly from Yahoo Finance or user-supplied Twelve Data, Alpha Vantage, CSV/JSON, and HTTPS sources. Optional AI research and CLI briefings send context only to the provider you choose, and log decisions locally for 28/180/365-day split-adjusted reviews, S&P 500 alpha, and Brier/ECE calibration (prompt context only, never model retraining).",
+                    );
+                    info_section(
+                        ui,
+                        p,
+                        "Local-first storage",
+                        "Watchlists, imports, daily sentiment history, prediction logs, and exported reports (.xlsx, .pdf, .docx) stay on this device with zero Tenerus servers or telemetry.",
                     );
                     ui.horizontal_wrapped(|ui| {
+                        ui.hyperlink_to("GitHub", "https://github.com/bnelabs/tenerus");
                         ui.hyperlink_to("Yahoo Finance", "https://finance.yahoo.com/");
                         ui.hyperlink_to("Twelve Data", "https://twelvedata.com/");
                         ui.hyperlink_to("Alpha Vantage", "https://www.alphavantage.co/");
