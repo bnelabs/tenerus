@@ -3,7 +3,7 @@
   <h1>Tenerus</h1>
   <p><strong>A local-first native desktop market research &amp; historical scenario workspace built in Rust — for macOS, Windows, Linux, and FreeBSD.</strong></p>
   <p>
-    <a href="https://github.com/bnelabs/tenerus/releases"><img src="https://img.shields.io/badge/release-v0.7.0-1c4f3c?style=flat-square" alt="Release v0.7.0" /></a>
+    <a href="https://github.com/bnelabs/tenerus/releases"><img src="https://img.shields.io/badge/release-v0.8.0-1c4f3c?style=flat-square" alt="Release v0.8.0" /></a>
     <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20(x64%2FARM64)%20%7C%20Linux%20(x64%2FARM64)%20%7C%20FreeBSD-182d26?style=flat-square" alt="Supported Platforms" />
     <img src="https://img.shields.io/badge/built%20with-Rust%20%2B%20egui-27674f?style=flat-square" alt="Rust + egui" />
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-54675e?style=flat-square" alt="MIT License" /></a>
@@ -40,12 +40,12 @@ Instead of presenting opaque "price predictions," Tenerus focuses on **transpare
 
 | Area | What it does |
 | --- | --- |
-| **Outlook (Self-Calibrating Scenarios)** | Strictly causal 4-model ensemble (**kernel/recency-weighted multivariable analogs**, **online L2 quantile regression**, **EWMA fat-tailed volatility**, and **unconditional baseline**) blended by walk-forward **pinball loss** with **split-conformal interval calibration** across **5, 20, or 60 sessions** (*Beginner*, *Expert*, and *Market god* replay & stress views). |
-| **News & Event Signal Analyzer** | Local zero-dependency headline polarity scorer, financial event tagger (*Earnings, Guidance, Analyst, M&A, Regulatory, Macro*), and **earnings-in-horizon gap-risk detector** surfaced in Outlook, local CLI briefings (`E7`), AI Research, and exported reports. |
+| **Outlook (Self-Calibrating Scenarios)** | Strictly causal 4-model ensemble (**kernel/recency-weighted multivariable analogs with S&P 500 regime**, **10-feature online L2 quantile regression with causal daily news ablation**, **mean-reverting GARCH(1,1) fat-tailed volatility**, and **unconditional baseline**) blended by walk-forward **pinball loss** with **split-conformal interval calibration** across **5, 20, or 60 sessions** (*Beginner*, *Expert*, and *Market god* replay & stress views). |
+| **News & Event Signal Analyzer** | Local zero-dependency headline polarity scorer, financial event tagger (*Earnings, Guidance, Analyst, M&A, Regulatory, Macro*), persisted daily sentiment store (`sentiment-history.json`) with walk-forward ablation, and **earnings-in-horizon gap-risk detector** surfaced in Outlook, local CLI briefings (`E7`), AI Research, and exported reports. |
 | **Price, Charts & News** | Multi-watchlist sidebar with drag-to-reorder and per-list sorting, 11 chart ranges (`1D`–`ALL`), volume & extended-hours toggles, optional fundamentals, public publisher headlines, saved stories, and tentative `.ics` earnings calendar export. |
 | **Local Assistant Briefings** | Run structured, evidence-cited briefings directly through locally installed CLIs (**Codex**, **Claude Code**, or **Antigravity**) using any valid CLI sign-in or API-key auth you configured locally. |
-| **Bring-Your-Own AI Research & Local TimesFM Pilot** | Connect directly to **OpenAI, Anthropic, Google, Grok · xAI, DeepSeek, NVIDIA, Meta**, or **Custom / localhost** endpoints (receiving full-window quant summaries, calibrated Outlook bands, news/event signals, and calibration history), plus an opt-in local **TimesFM** Python pilot bridge in the Forecast Model Guide. |
-| **Prediction Logbook & Calibration Engine** | Append-only local `predictions.json` audit log with split-adjusted 28/180/365-day reviews, **Always BUY / SELL / WAIT** baselines, **Brier Score**, **Expected Calibration Error (ECE)**, stated-vs-actual confidence buckets, mean returns per decision, and same-ticker-prioritized rolling context memory. |
+| **Bring-Your-Own AI Research & Local Foundation Pilots** | Connect directly to **OpenAI, Anthropic, Google, Grok · xAI, DeepSeek, NVIDIA, Meta**, or **Custom / localhost** endpoints (receiving full-window quant summaries, calibrated Outlook bands, news/event signals, and calibration history), plus opt-in local **TimesFM 2.5/3.0** and **Chronos-2** Python pilots with batched walk-forward split-conformal calibration, side-by-side Outlook scoreboards, and chart overlays. |
+| **Prediction Logbook & Calibration Engine** | Append-only local `predictions.json` audit log with split-adjusted 28/180/365-day reviews, **excess return vs. S&P 500 (`^GSPC` benchmark alpha)**, **Always BUY / SELL / WAIT** baselines, **Brier Score**, **Expected Calibration Error (ECE)**, stated-vs-actual confidence buckets, mean returns per decision, and same-ticker-prioritized rolling context memory. |
 | **Custom Data Imports & Exports** | Import up to 4,000 daily closes per ticker from **Twelve Data**, **Alpha Vantage**, local **CSV/JSON** files, or a custom HTTPS/localhost endpoint. Export Outlook or AI research reports to **Excel (`.xlsx`)**, **PDF (`.pdf`)**, or **Word (`.docx`)** on every supported OS, with timestamps and educational-use notices. |
 
 ---
@@ -143,11 +143,11 @@ Outlook runs a deterministic, inspectable **4-model strictly causal walk-forward
 
 ```mermaid
 flowchart TD
-    A["Up to 10 years of completed daily OHLCV bars<br/>(Yahoo Finance or user-imported series)"] --> B["Extract multivariable setup features:<br/>• 5d / 20d / 60d momentum & 60d drawdown<br/>• 20d daily volatility & 5d/20d vol ratio<br/>• 5d/20d volume ratio & OHLC range ratio"]
-    B --> C["Run 4 strictly causal models on prior non-overlapping windows:<br/>1. Kernel + recency-weighted analogs<br/>2. Online L2-regularized quantile regression<br/>3. RiskMetrics EWMA fat-tailed volatility<br/>4. Unconditional historical baseline"]
+    A["Up to 10 years of completed daily OHLCV bars<br/>+ S&P 500 (^GSPC) regime + persisted daily news history"] --> B["Extract 10 strictly causal features:<br/>• 5d / 20d / 60d momentum, 60d drawdown, 20d vol & 5d/20d vol ratio<br/>• 5d/20d volume & OHLC range ratios<br/>• 20d relative strength vs ^GSPC, S&P 500 vol & causal 14d news tone"]
+    B --> C["Run 4 strictly causal models on prior non-overlapping windows:<br/>1. Kernel + recency-weighted multivariable analogs<br/>2. 10-feature Online L2 quantile regression (+ news ablation)<br/>3. Mean-reverting GARCH(1,1) fat-tailed skew-adjusted volatility<br/>4. Unconditional historical baseline"]
     C --> D["Walk-forward out-of-sample replay (up to 36 past dates):<br/>Score every model with Pinball Loss & Hedge-blend weights"]
     D --> E["Split-conformal interval calibration:<br/>Adjust 10th/90th band from past out-of-sample residuals"]
-    E --> F["Surface calibrated 5 / 20 / 60-session fan +<br/>local headline sentiment & earnings-in-horizon gap warnings"]
+    E --> F["Surface calibrated 5 / 20 / 60-session fan +<br/>optional TimesFM / Chronos-2 conformal overlay & earnings gap warnings"]
 ```
 
 - **Zero look-ahead leakage:** In both live forecasts and *Market god* historical replays, every feature, online quantile regression weight, Hedge model weight, and conformal residual uses **strictly prior completed outcomes** (`end < anchor`).
@@ -160,7 +160,7 @@ When you explicitly request an AI research outlook under **Price & news**, Tener
 
 1. **Immutable logging:** Each horizon decision is appended atomically to local `predictions.json` with its original text, provider/model, reference price, and fixed checkpoints (**28, 180, and 365 days**).
 2. **Split-adjusted verification:** Once a checkpoint passes, Tenerus fetches the first completed daily close on or within 7 days after the checkpoint and aligns splits on the same basis (excluding dividends, fees, stale reference quotes, wrong currencies, and sample data).
-3. **Transparent scoring & calibration:** `BUY` is marked right above `+2%`, `SELL` below `−2%`, and `DO NOT BUY` at or below `+2%`. Results are displayed side-by-side against **Always BUY / Always SELL / Always WAIT** along with **Brier Score**, **Expected Calibration Error (ECE)**, stated-vs-actual confidence buckets, and mean realized returns per decision.
+3. **Transparent scoring, benchmark alpha & calibration:** `BUY` is marked right above `+2%`, `SELL` below `−2%`, and `DO NOT BUY` at or below `+2%`. Results are displayed side-by-side against **Always BUY / Always SELL / Always WAIT** along with **excess return vs. S&P 500 (`^GSPC` alpha)**, **Brier Score**, **Expected Calibration Error (ECE)**, stated-vs-actual confidence buckets, and mean realized returns per decision.
 4. **Calibration-aware prompt context (not LLM retraining):** If learning memory is enabled (default 180 days), Tenerus feeds the model's empirical calibration summary plus up to 24 reviewed outcomes (prioritizing same-ticker calls first) into your next request so the model can calibrate overconfidence. **No LLM weights are fine-tuned.**
 
 ---
@@ -230,7 +230,7 @@ sha256 -c SHA256SUMS.txt
 git clone https://github.com/bnelabs/tenerus.git
 cd tenerus
 
-# Run the full test suite (130 unit & headless UI tests)
+# Run the full test suite (137 unit & headless UI tests)
 cargo test
 
 # Launch in offline demonstration mode (labeled sample data)
@@ -244,7 +244,7 @@ Platform packaging scripts included in `scripts/`:
 - macOS: `sh scripts/package.sh`
 - Windows: `pwsh ./scripts/package-windows.ps1 -BinaryPath target/release/tenerus.exe -Arch x86_64`
 - Ubuntu `.deb`: `sh scripts/package-linux-deb.sh target/release/tenerus amd64`
-- Fedora `.rpm`: `rpmbuild -bb --define "_version 0.7.0" --define "_bin $(pwd)/target/release/tenerus" --define "_root $(pwd)" packaging/linux/tenerus.spec`
+- Fedora `.rpm`: `rpmbuild -bb --define "_version 0.8.0" --define "_bin $(pwd)/target/release/tenerus" --define "_root $(pwd)" packaging/linux/tenerus.spec`
 - Arch Linux: `cd packaging/arch && makepkg -si`
 - FreeBSD `.pkg` & `.tar.xz`: `sh scripts/package-freebsd.sh target/release/tenerus amd64`
 

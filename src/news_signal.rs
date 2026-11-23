@@ -1,9 +1,15 @@
 //! Deterministic local headline sentiment and event-risk analyzer.
 //! Treats all external headline text strictly as untrusted input data.
-use crate::model::Article;
-use serde::Serialize;
+use crate::model::{Article, atomic_json, read_saved_json, valid_ticker};
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 const DAY: i64 = 86_400;
+const MAX_SENTIMENT_DAYS: usize = 500;
+const MAX_SENTIMENT_TICKERS: usize = 100;
 
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct NewsSignal {
@@ -366,6 +372,129 @@ pub fn analyze_headlines(
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct DailySentiment {
+    pub day_time: i64,
+    pub score: f64,
+    pub article_count: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SentimentSeries {
+    pub entries: Vec<DailySentiment>,
+}
+
+impl SentimentSeries {
+    /// Strictly causal trailing 14-day exponentially decayed sentiment score for `at_time`.
+    /// Never reads any observation stamped after `at_time`.
+    pub fn causal_score(&self, at_time: i64) -> Option<f64> {
+        let mut num = 0.0;
+        let mut den = 0.0;
+        for e in &self.entries {
+            if e.day_time > at_time {
+                continue;
+            }
+            let age_days = (at_time - e.day_time) as f64 / DAY as f64;
+            if age_days > 14.0 || !e.score.is_finite() || e.article_count == 0 {
+                continue;
+            }
+            let w = (-age_days / 5.0).exp() * (e.article_count.min(10) as f64);
+            num += w * e.score.clamp(-1.0, 1.0);
+            den += w;
+        }
+        (den > 0.0).then(|| (num / den).clamp(-1.0, 1.0))
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+}
+
+#[derive(Default, Serialize, Deserialize)]
+struct PersistedSentiment {
+    tickers: BTreeMap<String, Vec<DailySentiment>>,
+}
+
+#[derive(Default)]
+pub struct SentimentStore {
+    path: Option<PathBuf>,
+    tickers: BTreeMap<String, Vec<DailySentiment>>,
+}
+
+impl SentimentStore {
+    pub fn load(path: Option<PathBuf>) -> Self {
+        let tickers = path
+            .as_deref()
+            .and_then(|p| read_saved_json::<PersistedSentiment>(p).ok().flatten())
+            .map(|p| p.tickers)
+            .unwrap_or_default();
+        Self { path, tickers }
+    }
+
+    pub fn record(&mut self, ticker: &str, observed_at: i64, signal: &NewsSignal) -> bool {
+        if !valid_ticker(ticker)
+            || observed_at <= 0
+            || signal.article_count == 0
+            || !signal.sentiment_score.is_finite()
+        {
+            return false;
+        }
+        let day_time = observed_at.div_euclid(DAY) * DAY;
+        let entry = DailySentiment {
+            day_time,
+            score: (signal.sentiment_score * 1000.0).round() / 1000.0,
+            article_count: signal.article_count,
+            tags: signal.event_tags.clone(),
+        };
+        let list = self.tickers.entry(ticker.to_owned()).or_default();
+        if let Some(existing) = list.iter_mut().find(|e| e.day_time == day_time) {
+            if *existing == entry {
+                return false;
+            }
+            *existing = entry;
+        } else {
+            list.push(entry);
+            list.sort_unstable_by_key(|e| e.day_time);
+            if list.len() > MAX_SENTIMENT_DAYS {
+                let drop = list.len() - MAX_SENTIMENT_DAYS;
+                list.drain(..drop);
+            }
+        }
+        while self.tickers.len() > MAX_SENTIMENT_TICKERS {
+            let oldest = self
+                .tickers
+                .iter()
+                .filter(|(k, _)| k.as_str() != ticker)
+                .min_by_key(|(_, v)| v.last().map_or(0, |e| e.day_time))
+                .map(|(k, _)| k.clone());
+            let Some(k) = oldest else { break };
+            self.tickers.remove(&k);
+        }
+        if let Some(path) = &self.path {
+            let _ = self.save_to(path);
+        }
+        true
+    }
+
+    pub fn series(&self, ticker: &str) -> Option<SentimentSeries> {
+        let entries = self.tickers.get(ticker)?;
+        (!entries.is_empty()).then(|| SentimentSeries {
+            entries: entries.clone(),
+        })
+    }
+
+    fn save_to(&self, path: &Path) -> Result<(), String> {
+        atomic_json(
+            path,
+            &PersistedSentiment {
+                tickers: self.tickers.clone(),
+            },
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -414,5 +543,42 @@ mod tests {
 
         let far = analyze_headlines(&articles, Some(now_ts + 45 * DAY), now_ts, 5);
         assert!(!far.earnings_in_horizon);
+    }
+
+    #[test]
+    fn sentiment_store_persists_daily_scores_and_queries_strictly_causally() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sentiment-history.json");
+        let day0 = 20_000 * DAY;
+        let pos = analyze_headlines(
+            &[article(
+                "Company beats Q4 earnings and raises guidance",
+                false,
+            )],
+            None,
+            day0,
+            20,
+        );
+        let neg = analyze_headlines(
+            &[article("Stock plunges after recall and SEC probe", false)],
+            None,
+            day0 + 5 * DAY,
+            20,
+        );
+        let mut store = SentimentStore::load(Some(path.clone()));
+        assert!(store.record("NVDA", day0 + 3600, &pos));
+        assert!(store.record("NVDA", day0 + 5 * DAY + 7200, &neg));
+
+        let reloaded = SentimentStore::load(Some(path));
+        let series = reloaded.series("NVDA").unwrap();
+        assert_eq!(series.len(), 2);
+        // At day0 + 2 days, the future negative score at day0 + 5 days must NOT leak!
+        let early = series.causal_score(day0 + 2 * DAY).unwrap();
+        assert!(early > 0.3);
+        // After day0 + 5 days, recent negative score dominates decayed positive score.
+        let later = series.causal_score(day0 + 6 * DAY).unwrap();
+        assert!(later < 0.0);
+        // Stale window (>14 days with no headlines) returns None.
+        assert!(series.causal_score(day0 + 30 * DAY).is_none());
     }
 }

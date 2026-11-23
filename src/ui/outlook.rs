@@ -41,7 +41,13 @@ fn briefing_key(history: &History, scenario: &Scenario, input: &Input, engine: E
     }
 }
 
-type ReportCache = (Arc<History>, usize, Result<Arc<Report>, &'static str>);
+type ReportCache = (
+    Arc<History>,
+    Option<Arc<History>>,
+    usize,
+    usize,
+    Result<Arc<Report>, &'static str>,
+);
 
 struct Playback {
     point: Replay,
@@ -53,10 +59,12 @@ struct Playback {
 pub(super) struct Desk {
     pub active: bool,
     pub imports: Imports,
-    horizon: usize,
+    pub sentiment: crate::news_signal::SentimentStore,
+    pub(super) horizon: usize,
     history_file: Option<PathBuf>,
     histories: HashMap<String, Arc<History>>,
     sample: Option<(String, Option<Arc<History>>)>,
+    sample_sp500: Option<Arc<History>>,
     inflight: HashSet<String>,
     attempted: HashMap<String, Instant>,
     errors: HashMap<String, String>,
@@ -84,14 +92,20 @@ impl Desk {
                     .as_ref()
                     .map(|path| path.with_file_name("imported-history.json")),
             ),
+            sentiment: crate::news_signal::SentimentStore::load(
+                history_file
+                    .as_ref()
+                    .map(|path| path.with_file_name("sentiment-history.json")),
+            ),
             history_file,
             histories: cached
                 .into_iter()
                 .filter(|h| !h.sample && h.valid())
-                .take(HISTORY_CACHE_SIZE)
+                .take(HISTORY_CACHE_SIZE + 1)
                 .map(|h| (h.ticker.clone(), Arc::new(h)))
                 .collect(),
             sample: None,
+            sample_sp500: None,
             inflight: HashSet::new(),
             attempted: HashMap::new(),
             errors: HashMap::new(),
@@ -125,20 +139,44 @@ impl Desk {
         self.histories.get(ticker).cloned()
     }
 
-    fn report(&mut self, history: &Arc<History>) -> Result<Arc<Report>, &'static str> {
+    pub(super) fn market_regime(&mut self, demo: bool) -> Option<Arc<History>> {
+        if demo {
+            if self.sample_sp500.is_none() {
+                self.sample_sp500 = History::sample("^GSPC").map(Arc::new);
+            }
+            return self.sample_sp500.clone();
+        }
+        self.histories.get("^GSPC").cloned()
+    }
+
+    fn report(&mut self, history: &Arc<History>, demo: bool) -> Result<Arc<Report>, &'static str> {
         let horizon = self.horizon;
-        if self
-            .report
-            .as_ref()
-            .is_none_or(|(h, n, _)| !Arc::ptr_eq(h, history) || *n != horizon)
-        {
+        let regime = self.market_regime(demo);
+        let sent_series = self.sentiment.series(&history.ticker);
+        let sent_len = sent_series.as_ref().map(|s| s.len()).unwrap_or(0);
+        let same_regime = |cached: &Option<Arc<History>>| match (cached, &regime) {
+            (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+            (None, None) => true,
+            _ => false,
+        };
+        if self.report.as_ref().is_none_or(|(h, r, sl, n, _)| {
+            !Arc::ptr_eq(h, history) || !same_regime(r) || *sl != sent_len || *n != horizon
+        }) {
             self.report = Some((
                 history.clone(),
+                regime.clone(),
+                sent_len,
                 horizon,
-                scenarios::report(history, horizon).map(Arc::new),
+                scenarios::report_with_context(
+                    history,
+                    horizon,
+                    regime.as_deref(),
+                    sent_series.as_ref(),
+                )
+                .map(Arc::new),
             ));
         }
-        self.report.as_ref().unwrap().2.clone()
+        self.report.as_ref().unwrap().4.clone()
     }
 
     pub(super) fn finish_history(
@@ -171,9 +209,17 @@ impl Desk {
                 }
                 self.errors.remove(&ticker);
                 self.histories.insert(ticker, Arc::new(history));
-                let mut newest = self.histories.values().map(Arc::as_ref).collect::<Vec<_>>();
+                let mut newest = self
+                    .histories
+                    .values()
+                    .filter(|h| h.ticker != "^GSPC")
+                    .map(Arc::as_ref)
+                    .collect::<Vec<_>>();
                 newest.sort_unstable_by_key(|h| (std::cmp::Reverse(h.fetched), &h.ticker));
                 newest.truncate(HISTORY_CACHE_SIZE);
+                if let Some(sp) = self.histories.get("^GSPC") {
+                    newest.push(sp.as_ref());
+                }
                 if let Some(path) = &self.history_file {
                     let _ = atomic_json(path, &newest);
                 }
@@ -230,30 +276,39 @@ impl MarketApp {
     }
 
     pub(super) fn load_outlook_history(&mut self, ctx: &egui::Context, force: bool) {
-        if !self.using_outlook() || self.prefs.offline || self.desk.inflight.len() >= 3 {
+        if !self.using_outlook() || self.prefs.offline {
             return;
         }
-        let ticker = self.prefs.selected.clone();
-        if self.desk.imports.get(&ticker).is_some()
-            || self.desk.inflight.contains(&ticker)
-            || (!force
-                && self
-                    .desk
-                    .attempted
-                    .get(&ticker)
-                    .is_some_and(|t| t.elapsed() < HISTORY_REFRESH))
-        {
-            return;
+        let selected = self.prefs.selected.clone();
+        let mut queue = vec![selected.clone()];
+        if selected != "^GSPC" {
+            queue.push("^GSPC".into());
         }
-        self.desk.inflight.insert(ticker.clone());
-        self.desk.attempted.insert(ticker.clone(), Instant::now());
-        let tx = self.tx.clone();
-        let ctx = ctx.clone();
-        std::thread::spawn(move || {
-            let result = network::fetch_scenario_history(&ticker);
-            let _ = tx.send(Event::ScenarioHistory(ticker, result));
-            ctx.request_repaint();
-        });
+        for ticker in queue {
+            if self.desk.inflight.len() >= 4 {
+                break;
+            }
+            if self.desk.imports.get(&ticker).is_some()
+                || self.desk.inflight.contains(&ticker)
+                || (!force
+                    && self
+                        .desk
+                        .attempted
+                        .get(&ticker)
+                        .is_some_and(|t| t.elapsed() < HISTORY_REFRESH))
+            {
+                continue;
+            }
+            self.desk.inflight.insert(ticker.clone());
+            self.desk.attempted.insert(ticker.clone(), Instant::now());
+            let tx = self.tx.clone();
+            let ctx = ctx.clone();
+            std::thread::spawn(move || {
+                let result = network::fetch_scenario_history(&ticker);
+                let _ = tx.send(Event::ScenarioHistory(ticker, result));
+                ctx.request_repaint();
+            });
+        }
     }
 
     pub(super) fn workspace_tabs(
@@ -305,7 +360,8 @@ impl MarketApp {
         let source = self.desk.imports.get(&ticker).map(|entry| entry.source);
         let quote = source.is_none().then(|| self.quote(&ticker)).flatten();
         let history = self.desk.history(&ticker, self.prefs.offline);
-        let report = history.as_ref().map(|h| self.desk.report(h));
+        let offline = self.prefs.offline;
+        let report = history.as_ref().map(|h| self.desk.report(h, offline));
         egui::CentralPanel::default()
             .frame(
                 Frame::new()
@@ -622,16 +678,27 @@ impl MarketApp {
                     scenario.up_count(), scenario.matches.len(), pct(range.low), pct(range.high)), 13.5, p.muted);
                 ui.add_space(6.);
                 let realized = playback.filter(|r| r.revealed).map(|r| r.realized.as_slice());
+                let foundation_overlay = if playback.is_none() {
+                    self.local_forecast
+                        .as_ref()
+                        .and_then(|res| res.as_ref().ok())
+                        .filter(|f| f.ticker == history.ticker && f.horizon == horizon)
+                } else {
+                    None
+                };
                 let stress = (self.prefs.outlook_depth == Depth::MarketGod).then_some(self.desk.stress / 100.);
                 let height_fraction = if self.prefs.outlook_depth == Depth::Beginner { 0.38 } else { 0.30 };
                 let desired = (ui.ctx().content_rect().height() * height_fraction).clamp(209., 366.);
                 let max_fit = (ui.clip_rect().bottom() - ui.cursor().top() - 4.).max(185.);
                 let height = desired.min(max_fit);
-                draw_fan(ui, p, scenario, &history.currency, height, playback.is_some(), realized, stress);
+                draw_fan(ui, p, scenario, &history.currency, height, playback.is_some(), realized, stress, foundation_overlay);
                 ui.add_space(9.);
                 ui.horizontal_wrapped(|ui| {
                     legend(ui, p.text, "Historical closes", p);
                     legend(ui, alpha(p.green, 72), "Middle 80% of matches", p);
+                    if let Some(f) = foundation_overlay {
+                        legend(ui, p.blue, &format!("{} (calibrated)", f.backend.short_label()), p);
+                    }
                     if realized.is_some() {
                         legend(ui, replay_color(p), "Realized path", p);
                     }
@@ -731,9 +798,17 @@ impl MarketApp {
             }
         });
         if before != selected {
+            let regime = self.desk.market_regime(self.prefs.offline);
+            let sent = self.desk.sentiment.series(&history.ticker);
             self.desk.playback = selected.and_then(|at| {
                 let point = report.trials.iter().find(|r| r.at == at)?.clone();
-                let (scenario, realized) = scenarios::replay(history, at, horizon)?;
+                let (scenario, realized) = scenarios::replay_with_context(
+                    history,
+                    at,
+                    horizon,
+                    regime.as_deref(),
+                    sent.as_ref(),
+                )?;
                 Some(Playback {
                     point,
                     scenario: Arc::new(scenario),
@@ -1207,14 +1282,24 @@ fn show_evaluation(ui: &mut egui::Ui, p: Palette, report: Option<&Report>, scena
                 12.,
                 p.muted,
             );
+            let ablation_tag = cal
+                .sentiment_pinball_delta
+                .map(|d| {
+                    format!(
+                        " · News Δ {:+.2} pp ({}t)",
+                        d * 100.,
+                        cal.sentiment_ablation_trials
+                    )
+                })
+                .unwrap_or_default();
             text(
                 ui,
                 format!(
-                    "Self-calibrating weights · Analogs {:.0}% ({:.1} eff.) · Online QR {:.0}% · EWMA {:.0}% · Baseline {:.0}% · Conformal {:+.1} pp",
+                    "Self-calibrating weights · Analogs {:.0}% ({:.1} eff.) · Online QR {:.0}% · GARCH(1,1) {:.0}% · Baseline {:.0}% · Conformal {:+.1} pp{ablation_tag}",
                     cal.weights.analogs * 100.,
                     cal.effective_matches,
                     cal.weights.online_qr * 100.,
-                    cal.weights.ewma * 100.,
+                    cal.weights.garch * 100.,
                     cal.weights.baseline * 100.,
                     cal.conformal_delta * 100.,
                 ),
@@ -1234,10 +1319,14 @@ fn show_evaluation(ui: &mut egui::Ui, p: Palette, report: Option<&Report>, scena
         .volume_ratio
         .map(|v| format!(" · vol 5d/20d {v:.2}x"))
         .unwrap_or_default();
+    let regime_text = match (setup.rel_strength_20, setup.market_vol_20) {
+        (Some(rs), Some(mv)) => format!(" · vs ^GSPC {} (mkt vol {:.2}%)", pct(rs), mv * 100.),
+        _ => String::new(),
+    };
     text(
         ui,
         format!(
-            "Setup · 5d/20d/60d {}, {}, {} · daily vol {:.2}% ({:.2}x) · 60d drawdown {}{vol_text}",
+            "Setup · 5d/20d/60d {}, {}, {} · daily vol {:.2}% ({:.2}x) · 60d drawdown {}{vol_text}{regime_text}",
             pct(setup.momentum_5),
             pct(setup.momentum),
             pct(setup.momentum_60),
@@ -1272,6 +1361,7 @@ fn draw_fan(
     replay: bool,
     revealed: Option<&[f64]>,
     stress: Option<f64>,
+    foundation: Option<&crate::forecast::LocalForecast>,
 ) {
     let (area, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
@@ -1291,7 +1381,12 @@ fn draw_fan(
         .iter()
         .map(|c| c.price)
         .chain(s.fan.iter().flat_map(|b| [project(b.low), project(b.high)]))
-        .chain(revealed.into_iter().flatten().map(|r| project(*r)));
+        .chain(revealed.into_iter().flatten().map(|r| project(*r)))
+        .chain(
+            foundation
+                .into_iter()
+                .flat_map(|f| [project(f.band.low), project(f.band.high)]),
+        );
     let first = extrema.next().unwrap_or(anchor);
     let (min, max) = extrema.fold((first, first), |(lo, hi), x| (lo.min(x), hi.max(x)));
     let padding = ((max - min) * 0.08).max(anchor * 0.005);
@@ -1414,6 +1509,29 @@ fn draw_fan(
                 .collect(),
             Stroke::new(2.5, replay_color(p)),
         ));
+    }
+    if let Some(f) = foundation {
+        let start = pos2(pivot, y(anchor));
+        let steps = s.fan.len().saturating_sub(1).max(1);
+        for (target, width_px, col) in [
+            (f.band.high, 1.3, alpha(p.blue, 195)),
+            (f.band.mid, 2.0, p.blue),
+            (f.band.low, 1.3, alpha(p.blue, 195)),
+        ] {
+            let end_p = pos2(plot.right(), y(project(target)));
+            let segs = 12usize;
+            for k in (0..segs).step_by(2) {
+                let t0 = k as f32 / segs as f32;
+                let t1 = ((k + 1) as f32 / segs as f32).min(1.0);
+                let x0 = start.x + (end_p.x - start.x) * t0;
+                let x1 = start.x + (end_p.x - start.x) * t1;
+                let y0 = y(project(target * (t0 as f64).sqrt()));
+                let y1 = y(project(target * (t1 as f64).sqrt()));
+                painter.line_segment([pos2(x0, y0), pos2(x1, y1)], Stroke::new(width_px, col));
+            }
+            let _ = steps;
+            painter.circle_stroke(end_p, 3.6, Stroke::new(1.5, p.blue));
+        }
     }
 
     let bottom = plot.bottom() + 11.;

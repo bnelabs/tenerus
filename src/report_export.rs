@@ -206,18 +206,44 @@ impl Report {
         results.text(
             "Self-calibrating ensemble weights",
             format!(
-                "Kernel analogs {:.0}% ({:.1} effective) · Online QR {:.0}% · EWMA volatility {:.0}% · Baseline {:.0}%",
+                "Kernel analogs {:.0}% ({:.1} effective) · Online QR {:.0}% · GARCH(1,1) volatility {:.0}% · Baseline {:.0}%",
                 cal.weights.analogs * 100.,
                 cal.effective_matches,
                 cal.weights.online_qr * 100.,
-                cal.weights.ewma * 100.,
+                cal.weights.garch * 100.,
                 cal.weights.baseline * 100.,
             ),
         );
         results.percent("Split-conformal interval adjustment", cal.conformal_delta);
+        if let (Some(rs), Some(mv)) = (scenario.setup.rel_strength_20, scenario.setup.market_vol_20)
+        {
+            results.text(
+                "Cross-asset S&P 500 regime",
+                format!(
+                    "20d relative strength {:+.1}% vs ^GSPC · S&P 500 daily vol {:.2}%",
+                    rs * 100.,
+                    mv * 100.
+                ),
+            );
+        }
+        if let Some(delta) = cal.sentiment_pinball_delta {
+            results.text(
+                "Walk-forward news sentiment ablation",
+                format!(
+                    "{:+.2} pp pinball delta across {} causal trials ({})",
+                    delta * 100.,
+                    cal.sentiment_ablation_trials,
+                    if delta < 0. {
+                        "stored headlines reduced error"
+                    } else {
+                        "stored headlines did not improve over price/regime features"
+                    }
+                ),
+            );
+        }
         results.text(
             "Method",
-            "Self-calibrating 4-model walk-forward ensemble combining kernel/recency-weighted multivariable analogues, online L2-regularized quantile regression, EWMA fat-tailed volatility, and unconditional baseline with split-conformal interval calibration.",
+            "Self-calibrating 4-model walk-forward ensemble combining kernel/recency-weighted multivariable analogues (with S&P 500 regime), online L2-regularized quantile regression (with causal daily news history), mean-reverting GARCH(1,1) fat-tailed skew-adjusted volatility, and unconditional baseline with split-conformal interval calibration.",
         );
 
         if let Some(trials) = trials.filter(|trials| !trials.is_empty()) {
@@ -246,10 +272,10 @@ impl Report {
             checks.text(
                 "Component model pinball losses",
                 format!(
-                    "Analogs {:.2} pp · Online QR {:.2} pp · EWMA {:.2} pp · Baseline {:.2} pp (raw coverage {}/{}, baseline {}/{})",
+                    "Analogs {:.2} pp · Online QR {:.2} pp · GARCH(1,1) {:.2} pp · Baseline {:.2} pp (raw coverage {}/{}, baseline {}/{})",
                     cal.analog_pinball * 100.,
                     cal.online_qr_pinball * 100.,
-                    cal.ewma_pinball * 100.,
+                    cal.garch_pinball * 100.,
                     cal.baseline_pinball * 100.,
                     cal.raw_covered,
                     cal.trial_count,

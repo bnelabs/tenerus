@@ -151,6 +151,24 @@ impl Input {
             .volume_ratio
             .map(|v| format!(", 5d/20d volume ratio {v:.2}x"))
             .unwrap_or_default();
+        let regime_detail = match (setup.rel_strength_20, setup.market_vol_20) {
+            (Some(rs), Some(mv)) => format!(
+                ", 20d rel. strength vs ^GSPC {}, S&P 500 daily vol {:.2}%",
+                percent(rs),
+                mv * 100.
+            ),
+            _ => String::new(),
+        };
+        let ablation_detail = cal
+            .sentiment_pinball_delta
+            .map(|d| {
+                format!(
+                    " Walk-forward news ablation ({} trials): {:+.2} pp pinball delta.",
+                    cal.sentiment_ablation_trials,
+                    d * 100.
+                )
+            })
+            .unwrap_or_default();
         let evidence = vec![
             Evidence {
                 id: "E1", label: "Reference close",
@@ -160,15 +178,15 @@ impl Input {
             },
             Evidence {
                 id: "E2", label: "Current price setup",
-                fact: format!("5d/20d/60d momentum {}, {}, {}; daily volatility {:.2}% (5d/20d vol ratio {:.2}x); drawdown from 60d high {}{vol_detail}.",
+                fact: format!("5d/20d/60d momentum {}, {}, {}; daily volatility {:.2}% (5d/20d vol ratio {:.2}x); drawdown from 60d high {}{vol_detail}{regime_detail}.",
                     percent(setup.momentum_5), percent(setup.momentum), percent(setup.momentum_60),
                     100. * setup.daily_volatility, setup.vol_ratio, percent(setup.drawdown)),
             },
             Evidence {
                 id: "E3", label: "Self-calibrating ensemble",
-                fact: format!("Blends kernel-weighted analogs ({:.0}%, {matched} matches, {:.1} effective; {} higher), online quantile regression ({:.0}%), EWMA volatility ({:.0}%), and baseline ({:.0}%). Calibrated 10th/50th/90th returns: {}, {}, {} (conformal adjustment {:+.1} pp).",
+                fact: format!("Blends kernel-weighted analogs ({:.0}%, {matched} matches, {:.1} effective; {} higher), online quantile regression ({:.0}%), GARCH(1,1) volatility ({:.0}%), and baseline ({:.0}%). Calibrated 10th/50th/90th returns: {}, {}, {} (conformal adjustment {:+.1} pp).{ablation_detail}",
                     cal.weights.analogs * 100., cal.effective_matches, scenario.up_count(),
-                    cal.weights.online_qr * 100., cal.weights.ewma * 100., cal.weights.baseline * 100.,
+                    cal.weights.online_qr * 100., cal.weights.garch * 100., cal.weights.baseline * 100.,
                     percent(end.low), percent(end.mid), percent(end.high), cal.conformal_delta * 100.),
             },
             Evidence {

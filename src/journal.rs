@@ -41,6 +41,7 @@ pub struct StockSplit {
 pub struct ReviewData {
     pub market: Market,
     pub splits: Vec<StockSplit>,
+    pub benchmark: Option<Vec<Point>>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -51,6 +52,10 @@ pub struct Realization {
     pub checked_at: i64,
     pub change_percent: f64,
     pub correct: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub benchmark_change_percent: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub excess_return_percent: Option<f64>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -163,6 +168,9 @@ pub struct CalibrationSummary {
     pub mean_buy_return: Option<f64>,
     pub mean_sell_return: Option<f64>,
     pub mean_wait_return: Option<f64>,
+    pub mean_buy_alpha: Option<f64>,
+    pub mean_sell_alpha: Option<f64>,
+    pub mean_wait_alpha: Option<f64>,
     pub buckets: Vec<CalibrationBucket>,
 }
 
@@ -177,6 +185,8 @@ pub struct LearningExample {
     pub decided_at: i64,
     pub reviewed_price_at: i64,
     pub realized_change_percent: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub excess_return_vs_sp500_percent: Option<f64>,
     pub correct: bool,
 }
 #[derive(Clone, Serialize, Debug)]
@@ -305,6 +315,37 @@ impl Journal {
                 continue;
             }
             let correct = decision_correct(entry.decision, reference, point.close);
+            let (benchmark_change_percent, excess_return_percent) = if entry.symbol != "^GSPC" {
+                data.benchmark
+                    .as_deref()
+                    .and_then(|bench| {
+                        let start = bench
+                            .iter()
+                            .filter(|p| {
+                                p.time <= entry.quote_time
+                                    && entry.quote_time.saturating_sub(p.time) <= 7 * DAY
+                                    && p.close.is_finite()
+                                    && p.close > 0.
+                            })
+                            .max_by_key(|p| p.time)?;
+                        let end = bench
+                            .iter()
+                            .filter(|p| {
+                                p.time.abs_diff(point.time) <= (3 * DAY) as u64
+                                    && p.time.saturating_add(DAY) <= at
+                                    && p.close.is_finite()
+                                    && p.close > 0.
+                            })
+                            .min_by_key(|p| p.time.abs_diff(point.time))?;
+                        let bench_chg = (end.close - start.close) / start.close * 100.;
+                        let excess = change - bench_chg;
+                        (bench_chg.is_finite() && excess.is_finite())
+                            .then_some((Some(bench_chg), Some(excess)))
+                    })
+                    .unwrap_or((None, None))
+            } else {
+                (None, None)
+            };
             entry.outcome = Some(Realization {
                 price: point.close,
                 comparison_reference_price: reference,
@@ -312,6 +353,8 @@ impl Journal {
                 checked_at: at,
                 change_percent: change,
                 correct,
+                benchmark_change_percent,
+                excess_return_percent,
             });
             resolved += 1;
         }
@@ -410,6 +453,9 @@ impl Journal {
         let mut buy_rets = Vec::new();
         let mut sell_rets = Vec::new();
         let mut wait_rets = Vec::new();
+        let mut buy_alphas = Vec::new();
+        let mut sell_alphas = Vec::new();
+        let mut wait_alphas = Vec::new();
         // 4 calibration buckets: <50%, 50–69%, 70–84%, 85–100%
         let bucket_defs: [(&str, f64, f64); 4] = [
             ("0–49%", 0.0, 50.0),
@@ -426,9 +472,24 @@ impl Journal {
                 continue;
             };
             match e.decision {
-                Decision::Buy => buy_rets.push(o.change_percent),
-                Decision::Sell => sell_rets.push(o.change_percent),
-                Decision::DoNotBuy => wait_rets.push(o.change_percent),
+                Decision::Buy => {
+                    buy_rets.push(o.change_percent);
+                    if let Some(a) = o.excess_return_percent.filter(|v| v.is_finite()) {
+                        buy_alphas.push(a);
+                    }
+                }
+                Decision::Sell => {
+                    sell_rets.push(o.change_percent);
+                    if let Some(a) = o.excess_return_percent.filter(|v| v.is_finite()) {
+                        sell_alphas.push(a);
+                    }
+                }
+                Decision::DoNotBuy => {
+                    wait_rets.push(o.change_percent);
+                    if let Some(a) = o.excess_return_percent.filter(|v| v.is_finite()) {
+                        wait_alphas.push(a);
+                    }
+                }
             }
             if let Some(conf) = e
                 .confidence_percent
@@ -453,6 +514,9 @@ impl Journal {
         summary.mean_buy_return = avg(&buy_rets);
         summary.mean_sell_return = avg(&sell_rets);
         summary.mean_wait_return = avg(&wait_rets);
+        summary.mean_buy_alpha = avg(&buy_alphas);
+        summary.mean_sell_alpha = avg(&sell_alphas);
+        summary.mean_wait_alpha = avg(&wait_alphas);
         summary.scored_with_confidence = conf_count;
         if conf_count > 0 {
             summary.brier_score = Some(brier_sum / conf_count as f64);
@@ -519,6 +583,7 @@ impl Journal {
                 decided_at: e.generated,
                 reviewed_price_at: outcome.price_time,
                 realized_change_percent: outcome.change_percent,
+                excess_return_vs_sp500_percent: outcome.excess_return_percent,
                 correct: outcome.correct,
             }
         };
@@ -599,6 +664,7 @@ pub(crate) mod tests {
         ReviewData {
             market,
             splits: vec![],
+            benchmark: None,
         }
     }
     fn reviewed_entry(
@@ -1037,6 +1103,42 @@ pub(crate) mod tests {
         assert_eq!(mem.same_ticker_examples, 1);
         assert_eq!(mem.examples[0].ticker, "NVDA");
         assert!(mem.calibration.brier_score.is_some());
+    }
+    #[test]
+    fn benchmark_alpha_scores_excess_return_against_sp500() {
+        let mut journal = Journal::default();
+        let mut a = analysis();
+        a.horizons[0].decision = Some(Decision::Buy);
+        journal.record(&a);
+        let id = journal.entries[0].id;
+        let quote_t = journal.entries[0].quote_time;
+        let due = journal.entries[0].review_at;
+
+        // Stock rose +10% (100 -> 110), while S&P 500 rose +15% (5000 -> 5750):
+        // Absolute return is +10% (Buy "correct"), but benchmark alpha is -5.0%.
+        let mut data = prices(due, 110.);
+        data.benchmark = Some(vec![
+            Point {
+                time: quote_t - DAY,
+                close: 5000.,
+                volume: None,
+            },
+            Point {
+                time: due,
+                close: 5750.,
+                volume: None,
+            },
+        ]);
+        assert_eq!(journal.resolve(&[id], &data, due + DAY), 1);
+        let out = journal.entries[0].outcome.as_ref().unwrap();
+        assert!((out.change_percent - 10.0).abs() < 1e-6);
+        assert!((out.benchmark_change_percent.unwrap() - 15.0).abs() < 1e-6);
+        assert!((out.excess_return_percent.unwrap() - (-5.0)).abs() < 1e-6);
+
+        let cal = journal.calibration(&Provider::meta(), None, due + 2 * DAY);
+        assert!((cal.mean_buy_alpha.unwrap() - (-5.0)).abs() < 1e-6);
+        let mem = journal.learning_context_for(&Provider::meta(), Some("NVDA"), 180, due + 2 * DAY);
+        assert!((mem.examples[0].excess_return_vs_sp500_percent.unwrap() - (-5.0)).abs() < 1e-6);
     }
     #[test]
     fn damaged_journal_is_reported_without_touching_the_saved_file() {

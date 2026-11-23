@@ -234,6 +234,7 @@ pub struct MarketApp {
     model_guide_open: bool,
     local_model_check: Option<crate::forecast::MacCheck>,
     local_model_check_busy: bool,
+    local_forecast_backend: crate::forecast::FoundationBackend,
     local_forecast: Option<Result<crate::forecast::LocalForecast, String>>,
     local_forecast_busy: bool,
     desk: outlook::Desk,
@@ -449,6 +450,7 @@ impl MarketApp {
             model_guide_open: launch.view == "models",
             local_model_check: None,
             local_model_check_busy: false,
+            local_forecast_backend: crate::forecast::FoundationBackend::TimesFm,
             local_forecast: None,
             local_forecast_busy: false,
             desk: outlook::Desk::new(
@@ -968,7 +970,14 @@ impl MarketApp {
                         match result {
                             Ok(n) => {
                                 self.failures.remove(&format!("news:{t}"));
-                                self.news_fetched.insert(t.clone(), now());
+                                let observed = now();
+                                if t != "__market" {
+                                    let sig = crate::news_signal::analyze_headlines(
+                                        &n, None, observed, 20,
+                                    );
+                                    self.desk.sentiment.record(&t, observed, &sig);
+                                }
+                                self.news_fetched.insert(t.clone(), observed);
                                 self.news.insert(t, n);
                                 cache_changed = true;
                             }
@@ -1155,10 +1164,15 @@ impl MarketApp {
             self.analyzing.insert(t.clone());
             self.ai_errors.remove(&key);
             let news = self.news.get(&t).cloned().unwrap_or_default();
+            let regime = self.desk.market_regime(sample);
+            let sent = self.desk.sentiment.series(&t);
             let outlook_snap = self
                 .desk
                 .history(&t, sample)
-                .and_then(|h| crate::scenarios::report(&h, 20).ok())
+                .and_then(|h| {
+                    crate::scenarios::report_with_context(&h, 20, regime.as_deref(), sent.as_ref())
+                        .ok()
+                })
                 .map(|r| network::OutlookSnapshot::from_scenario(&r.current));
             let mem = self.journal.learning_context_for(
                 &p,
@@ -2718,13 +2732,25 @@ impl MarketApp {
                 stats.push(format!("Calibration error (ECE) {:.1}%", ece * 100.));
             }
             if let Some(r) = cal.mean_buy_return {
-                stats.push(format!("Avg BUY {r:+.1}%"));
+                let alpha = cal
+                    .mean_buy_alpha
+                    .map(|a| format!(" (α {a:+.1}% vs ^GSPC)"))
+                    .unwrap_or_default();
+                stats.push(format!("Avg BUY {r:+.1}%{alpha}"));
             }
             if let Some(r) = cal.mean_sell_return {
-                stats.push(format!("Avg SELL {r:+.1}%"));
+                let alpha = cal
+                    .mean_sell_alpha
+                    .map(|a| format!(" (α {a:+.1}% vs ^GSPC)"))
+                    .unwrap_or_default();
+                stats.push(format!("Avg SELL {r:+.1}%{alpha}"));
             }
             if let Some(r) = cal.mean_wait_return {
-                stats.push(format!("Avg WAIT {r:+.1}%"));
+                let alpha = cal
+                    .mean_wait_alpha
+                    .map(|a| format!(" (α {a:+.1}% vs ^GSPC)"))
+                    .unwrap_or_default();
+                stats.push(format!("Avg WAIT {r:+.1}%{alpha}"));
             }
             if !stats.is_empty() {
                 text(ui, stats.join("  ·  "), 11.5, p.text);
@@ -2792,30 +2818,133 @@ impl MarketApp {
                             });
                         }
                         let selected_ticker = self.prefs.selected.clone();
+                        let pilot_horizon = self.desk.horizon;
                         let pilot_history = self.desk.history(&selected_ticker, self.prefs.offline);
+                        egui::ComboBox::from_id_salt("foundation_backend_select")
+                            .width(142.)
+                            .selected_text(self.local_forecast_backend.label())
+                            .show_ui(ui, |ui| {
+                                for backend in crate::forecast::FoundationBackend::ALL {
+                                    ui.selectable_value(
+                                        &mut self.local_forecast_backend,
+                                        backend,
+                                        backend.label(),
+                                    );
+                                }
+                            });
+                        let backend = self.local_forecast_backend;
                         let can_pilot = !self.local_forecast_busy && !self.transient && pilot_history.is_some();
-                        if ui.add_enabled(can_pilot, egui::Button::new(format!("Run local TimesFM pilot ({selected_ticker})"))).clicked()
+                        if ui.add_enabled(can_pilot, egui::Button::new(format!("Run {} pilot ({selected_ticker}, {pilot_horizon}d)", backend.short_label()))).clicked()
                             && let Some(history) = pilot_history
                         {
+                            let regime = self.desk.market_regime(self.prefs.offline);
+                            let sent = self.desk.sentiment.series(&selected_ticker);
                             self.local_forecast_busy = true;
                             let tx = self.tx.clone();
                             let ctx = ctx.clone();
                             std::thread::spawn(move || {
-                                let _ = tx.send(Event::LocalForecast(crate::forecast::run_local_forecast(&history, 28)));
+                                let _ = tx.send(Event::LocalForecast(crate::forecast::run_foundation_pilot(
+                                    &history,
+                                    pilot_horizon,
+                                    backend,
+                                    regime.as_deref(),
+                                    sent.as_ref(),
+                                )));
                                 ctx.request_repaint();
                             });
                         }
                     });
                     ui.add_space(12.);
                     if self.local_forecast_busy {
-                        ui.horizontal(|ui| { ui.spinner(); text(ui, "Running opt-in local TimesFM 28-session pilot…", 12., p.muted); });
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            text(
+                                ui,
+                                format!(
+                                    "Running opt-in local {} walk-forward conformal pilot ({} sessions)…",
+                                    self.local_forecast_backend.short_label(),
+                                    self.desk.horizon
+                                ),
+                                12.,
+                                p.muted,
+                            );
+                        });
                         ui.add_space(6.);
                     } else if let Some(result) = &self.local_forecast {
                         Frame::new().fill(p.panel).stroke(Stroke::new(1., p.line)).corner_radius(9).inner_margin(10).show(ui, |ui| {
                             match result {
                                 Ok(f) => {
-                                    text(ui, format!("Local TimesFM pilot · {} (+{} sessions · runtime {} · {} ms)", f.ticker, f.horizon, f.runtime, f.elapsed_ms), 13., p.green);
-                                    text(ui, format!("10th: {:+.1}%  ·  Median: {:+.1}%  ·  90th: {:+.1}%  (anchor {})", f.band.low * 100., f.band.mid * 100., f.band.high * 100., price(f.anchor_price)), 12., p.text);
+                                    let sb = f.scoreboard;
+                                    text(
+                                        ui,
+                                        format!(
+                                            "Local {} pilot · {} (+{} sessions · runtime {} · {} ms · overlaid on Outlook chart)",
+                                            f.backend.label(),
+                                            f.ticker,
+                                            f.horizon,
+                                            f.runtime,
+                                            f.elapsed_ms
+                                        ),
+                                        13.,
+                                        p.green,
+                                    );
+                                    text(
+                                        ui,
+                                        format!(
+                                            "Calibrated 10th/50th/90th: {:+.1}% / {:+.1}% / {:+.1}%  (raw {:+.1}%..{:+.1}%, conformal {:+.1} pp, anchor {})",
+                                            f.band.low * 100.,
+                                            f.band.mid * 100.,
+                                            f.band.high * 100.,
+                                            f.raw_band.low * 100.,
+                                            f.raw_band.high * 100.,
+                                            sb.conformal_delta * 100.,
+                                            price(f.anchor_price),
+                                        ),
+                                        12.,
+                                        p.text,
+                                    );
+                                    if sb.trials > 0 {
+                                        ui.add_space(6.);
+                                        egui::Grid::new("foundation_scoreboard_grid")
+                                            .striped(true)
+                                            .spacing(vec2(16., 6.))
+                                            .show(ui, |ui| {
+                                                for h in ["Model (same dates)", "80% Coverage", "Pinball Loss", "Median MAE"] {
+                                                    text(ui, h, 11., p.muted);
+                                                }
+                                                ui.end_row();
+                                                text(ui, format!("{} (calibrated)", f.backend.short_label()), 11.5, p.text);
+                                                text(ui, format!("{}/{} (raw {})", sb.fm_cal_covered, sb.trials, sb.fm_raw_covered), 11.5, p.text);
+                                                text(ui, format!("{:.2} pp", sb.fm_pinball * 100.), 11.5, p.text);
+                                                text(ui, format!("{:.1} pp", sb.fm_mae * 100.), 11.5, p.text);
+                                                ui.end_row();
+                                                if sb.outlook_matched_trials > 0 {
+                                                    text(ui, "Outlook 4-Model Ensemble", 11.5, p.text);
+                                                    text(ui, format!("{}/{}", sb.outlook_covered, sb.outlook_matched_trials), 11.5, p.text);
+                                                    text(ui, format!("{:.2} pp", sb.outlook_pinball * 100.), 11.5, p.text);
+                                                    text(ui, format!("{:.1} pp", sb.outlook_mae * 100.), 11.5, p.text);
+                                                    ui.end_row();
+                                                    text(ui, "Unconditional Baseline", 11.5, p.muted);
+                                                    text(ui, format!("{}/{}", sb.baseline_covered, sb.outlook_matched_trials), 11.5, p.muted);
+                                                    text(ui, format!("{:.2} pp", sb.baseline_pinball * 100.), 11.5, p.muted);
+                                                    text(ui, format!("{:.1} pp", sb.baseline_mae * 100.), 11.5, p.muted);
+                                                    ui.end_row();
+                                                }
+                                            });
+                                        if let Some(skill) = sb.skill_vs_outlook() {
+                                            text(
+                                                ui,
+                                                format!(
+                                                    "{} vs Outlook 4-Model Ensemble: {:+.1}% pinball skill across {} matched walk-forward dates.",
+                                                    f.backend.short_label(),
+                                                    skill * 100.,
+                                                    sb.outlook_matched_trials
+                                                ),
+                                                11.,
+                                                if skill > 0. { p.green } else { p.muted },
+                                            );
+                                        }
+                                    }
                                 }
                                 Err(err) => {
                                     text(ui, err, 12., p.red);
@@ -2826,9 +2955,9 @@ impl MarketApp {
                     }
                     Frame::new().fill(alpha(p.blue, 12)).corner_radius(9).inner_margin(12).show(ui, |ui| {
                         small_title(ui, "RECOMMENDED START", p);
-                        text(ui, "TimesFM 3.0 · Latest Google release", 17., p.text);
-                        text(ui, format!("Model: {} · Runtime: {} · Checked 12 Nov 2026", crate::forecast::MODEL, crate::forecast::RUNTIME), 11., p.muted);
-                        text(ui, "Use Google's Apple Silicon backend (MLX) on Apple Silicon Macs (macOS 14+ and native Python 3.10+) for a local research pilot. Check this device to see its hardware, OS, and installed runtime; hardware suitability alone does not confirm a working forecast.", 12., p.muted);
+                        text(ui, "TimesFM 3.0 & Chronos-2 · Opt-in local foundation pilots", 17., p.text);
+                        text(ui, format!("Models: {} (runtime {}) · {} (chronos-forecasting)", crate::forecast::MODEL, crate::forecast::RUNTIME, crate::forecast::CHRONOS_MODEL), 11., p.muted);
+                        text(ui, "Choose either TimesFM (Google's MLX/PyTorch backend) or Chronos-2 (Amazon's Apache-2.0 quantile forecaster via chronos-forecasting) above. Each pilot runs batched non-overlapping walk-forward cutoffs + split-conformal calibration in one model load and compares directly against Outlook's 4-model ensemble.", 12., p.muted);
                         text(ui, crate::forecast::PILOT, 12., p.text);
                         text(ui, "Start with short forecasts and a small batch. The weights download is about 1.32 GB; allow at least 4 GB free for setup. A 16 GB memory budget is our conservative pilot recommendation, not a measured requirement or speed guarantee. Six-month and one-year forecasts need separate validation.", 12., p.muted);
                         text(ui, "Downloaded 3.0 weights permit non-commercial, non-production research only, including limits on using results for commercial decisions. For production, Google offers an authorized Cloud route. TimesFM 2.5 has Apache-2.0 weights but is an older alternative, not the latest model.", 12., p.muted);
@@ -2856,15 +2985,16 @@ impl MarketApp {
                     text(ui, "Reserve later dates for testing. Train or tune only on earlier data, leave a gap for overlapping target windows, and use only news and fundamentals known at each forecast date. Compare against an unchanged-price forecast and a simple shared model, then evaluate simulated returns after fees and spreads. Report uncertainty by ticker and horizon.", 12., p.muted);
                     ui.add_space(12.); ui.separator(); ui.add_space(10.);
                     small_title(ui, "WHAT RUNS IN TENERUS TODAY", p);
-                    text(ui, "Self-calibrating Outlook ensemble + Calibration Logbook + Opt-in local TimesFM bridge", 14., p.text);
-                    text(ui, "Outlook · 4-model conformal ensemble (active)    /    Local TimesFM · Opt-in pilot", 12., p.blue);
-                    text(ui, "Outlook runs four strictly causal local models (kernel-weighted multivariable analogs, online L2 quantile regression, EWMA fat-tailed volatility, and baseline) blended by out-of-sample pinball loss with split-conformal calibration. AI learning memory supplies empirical calibration buckets (Brier/ECE) and same-ticker reviewed outcomes as prompt context (no LLM weight retraining).", 12., p.muted);
+                    text(ui, "Self-calibrating Outlook ensemble + Benchmark-Alpha Logbook + Opt-in TimesFM / Chronos-2 bridge", 14., p.text);
+                    text(ui, "Outlook · 4-model GARCH(1,1) + S&P 500 regime conformal ensemble    /    Local TimesFM & Chronos-2 · Opt-in conformal pilot", 12., p.blue);
+                    text(ui, "Outlook runs four strictly causal local models (kernel-weighted multivariable analogs with S&P 500 regime, 10-feature online L2 quantile regression with causal news history ablation, mean-reverting GARCH(1,1) volatility, and baseline) blended by out-of-sample pinball loss with split-conformal calibration. The Prediction Logbook tracks Brier/ECE calibration and excess return vs. ^GSPC (prompt context only, never LLM weight retraining). Opt-in local TimesFM and Chronos-2 pilots run batched walk-forward conformal backtests scored apples-to-apples against Outlook.", 12., p.muted);
                     ui.add_space(10.);
                     self.model_comparisons(ui, p, true);
                     ui.add_space(12.);
                     egui::CollapsingHeader::new("Sources · checked 12 Nov 2026").show(ui, |ui| {
                         ui.hyperlink_to("Google Research · TimesFM-3", "https://research.google/blog/timesfm-3-a-zero-shot-foundation-model-for-multivariate-forecasting/");
                         ui.hyperlink_to("Google's TimesFM repository · Models and licenses", "https://github.com/google-research/timesfm");
+                        ui.hyperlink_to("Amazon Science · Chronos-2 forecasting repository", "https://github.com/amazon-science/chronos-forecasting");
                         ui.hyperlink_to("Official Apple Silicon backend", "https://github.com/google-research/timesfm#apple-silicon-mlx-backend");
                         ui.hyperlink_to("Runtime release · TimesFM 3.0.2", "https://pypi.org/project/timesfm/3.0.2/");
                         ui.hyperlink_to("Apple MLX · System requirements", "https://ml-explore.github.io/mlx/build/html/install.html");
@@ -2971,7 +3101,16 @@ impl MarketApp {
                             let verified = e.verified_outcome(checked_at);
                             text(ui, e.status(checked_at), 13., verified.map(|o| if o.correct { p.green } else { p.red }).unwrap_or(p.blue));
                             if let Some(outcome) = verified {
-                                text(ui, format!("Price change {:+.2}% · {} {} → {} {}", outcome.change_percent, price(outcome.comparison_reference_price), e.currency, price(outcome.price), e.currency), 12., p.text);
+                                let bench_text = match (
+                                    outcome.benchmark_change_percent,
+                                    outcome.excess_return_percent,
+                                ) {
+                                    (Some(b), Some(a)) => {
+                                        format!(" · ^GSPC {b:+.2}% · Alpha {a:+.2}%")
+                                    }
+                                    _ => String::new(),
+                                };
+                                text(ui, format!("Price change {:+.2}%{bench_text} · {} {} → {} {}", outcome.change_percent, price(outcome.comparison_reference_price), e.currency, price(outcome.price), e.currency), 12., p.text);
                                 if e.reference_price.is_some_and(|v| (v - outcome.comparison_reference_price).abs() > 0.000001) { text(ui, "Comparison prices adjusted for reported stock splits.", 10.5, p.muted); }
                                 text(ui, format!("Closing session {} · Checked {}", stamp(outcome.price_time), stamp(outcome.checked_at)), 10.5, p.muted);
                             }
@@ -3936,7 +4075,7 @@ mod interaction_tests {
             "Open prediction logbook",
             "AI connections",
             "Check this device",
-            "TimesFM 3.0 · Latest Google release",
+            "TimesFM 3.0 & Chronos-2 · Opt-in local foundation pilots",
             "RECOMMENDED START",
         ] {
             let pos = all
@@ -3961,6 +4100,79 @@ mod interaction_tests {
             app.prefs.providers[app.prefs.active_provider].fingerprint(),
             provider_before
         );
+    }
+    #[test]
+    fn foundation_pilot_renders_side_by_side_scoreboard_and_outlook_overlay() {
+        let (ctx, mut app) = setup();
+        app.model_guide_open = true;
+        app.local_forecast_busy = true;
+        app.tx
+            .send(Event::LocalForecast(Ok(crate::forecast::LocalForecast {
+                ticker: app.prefs.selected.clone(),
+                horizon: 20,
+                backend: crate::forecast::FoundationBackend::Chronos,
+                model: crate::forecast::CHRONOS_MODEL.into(),
+                runtime: "2.0.0".into(),
+                anchor_price: 135.0,
+                raw_band: crate::forecast::LocalBand {
+                    low: -0.04,
+                    mid: 0.02,
+                    high: 0.08,
+                },
+                band: crate::forecast::LocalBand {
+                    low: -0.06,
+                    mid: 0.02,
+                    high: 0.10,
+                },
+                scoreboard: crate::forecast::FoundationScoreboard {
+                    trials: 12,
+                    conformal_delta: 0.02,
+                    fm_raw_covered: 8,
+                    fm_cal_covered: 10,
+                    fm_pinball: 0.018,
+                    fm_mae: 0.041,
+                    outlook_matched_trials: 12,
+                    outlook_covered: 10,
+                    outlook_pinball: 0.019,
+                    outlook_mae: 0.043,
+                    baseline_covered: 9,
+                    baseline_pinball: 0.021,
+                    baseline_mae: 0.048,
+                },
+                elapsed_ms: 420,
+            })))
+            .unwrap();
+        app.poll();
+        let size = vec2(1280., 860.);
+        for _ in 0..8 {
+            let _ = frame(&ctx, &mut app, vec![], size);
+        }
+        let out = frame(&ctx, &mut app, vec![], size);
+        let all = labels(&out);
+        assert!(
+            all.iter()
+                .any(|(s, _)| s.contains("Chronos-2 (calibrated)"))
+        );
+        assert!(
+            all.iter()
+                .any(|(s, _)| s.contains("Outlook 4-Model Ensemble"))
+        );
+        assert!(
+            all.iter()
+                .any(|(s, _)| s.contains("Unconditional Baseline"))
+        );
+        assert!(all.iter().any(|(s, _)| s.contains("pinball skill")));
+
+        // Closing the guide reveals Outlook with the Chronos-2 calibrated overlay legend.
+        app.model_guide_open = false;
+        app.desk.active = true;
+        app.prefs.offline = true;
+        for _ in 0..4 {
+            let _ = frame(&ctx, &mut app, vec![], size);
+        }
+        let out2 = frame(&ctx, &mut app, vec![], size);
+        let all2 = labels(&out2);
+        assert!(all2.iter().any(|(s, _)| s == "Chronos-2 (calibrated)"));
     }
     #[test]
     fn local_check_result_keeps_setup_needed_separate_from_hardware_suitability() {

@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.8.0] — 2026-11-23
+
+Completes **100% of Tiers 1–3** of the quantitative modeling, benchmark-alpha evaluation, persisted news ablation, and local foundation-model forecasting roadmap across all platforms.
+
+### Added
+- **Cross-Asset S&P 500 (`^GSPC`) Market-Regime Features (`src/scenarios.rs`, `src/ui/outlook.rs`):** Outlook automatically loads completed S&P 500 daily closes alongside the selected ticker (or `History::sample("^GSPC")` offline) and extracts strictly causal 20-day relative strength (`rel_strength_20`) and broad market volatility (`market_vol_20`) into analogue matching and Online Quantile Regression.
+- **Benchmark Alpha vs. `^GSPC` in Prediction Logbook (`src/journal.rs`, `src/network.rs`, `src/ui.rs`):** Automated 28/180/365-day outcome reviews now fetch best-effort S&P 500 closes over the exact same window to compute realized excess return (`alpha = ticker return − ^GSPC return`), surfaced per entry, aggregated as `mean_buy_alpha` / `mean_sell_alpha` / `mean_wait_alpha`, and included in `LearningContext` calibration feedback.
+- **Mean-Reverting GARCH(1,1) + Fat-Tailed Skew-Adjusted Volatility (`src/scenarios.rs`):** Replaced non-mean-reverting RiskMetrics EWMA with a strictly causal stationary **GARCH(1,1)** recursion ($\alpha = 0.08$, $\beta = 0.88$, $\omega = 0.04\,\bar{\sigma}^2$) using exact analytical multi-step cumulative variance $V_h$ and Cornish-Fisher skewness-adjusted fat-tailed quantiles.
+- **Persisted Daily News Sentiment Store & Walk-Forward Ablation (`src/news_signal.rs`, `src/scenarios.rs`, `src/ui.rs`):** Automatically persists daily headline sentiment snapshots to `sentiment-history.json` (bounded and strictly causal via 14-day exponentially decayed lookup), feeds historical sentiment as the 10th feature in Online Quantile Regression, and runs an out-of-sample walk-forward ablation (`sentiment_pinball_delta`) measuring whether stored headlines actually reduce pinball loss.
+- **Chronos-2 + Batched Walk-Forward Conformal Foundation Model Bridge (`src/forecast.rs`, `src/ui.rs`, `src/ui/outlook.rs`):** Expanded the opt-in local Python bridge to support both **TimesFM 2.5/3.0** and **Amazon Chronos-2 (`chronos-forecasting`)**, execute up to 12 non-overlapping walk-forward cutoffs plus the live window in a single model load, apply causal split-conformal calibration, display an apples-to-apples **Side-by-Side Walk-Forward Scoreboard** (Foundation Calibrated vs. Outlook 4-Model Ensemble vs. Baseline — Coverage, Pinball Loss, Median MAE), and overlay calibrated foundation bounds directly on the Outlook fan chart.
+
+### Changed
+- **Briefings, Exports & Test Suite:** Updated CLI briefing evidence (`E2`/`E3`), `.xlsx`/`.pdf`/`.docx` report exports, and `OutlookSnapshot` with GARCH(1,1), S&P 500 regime context, and news sentiment ablation results. Expanded offline test coverage to **137 tests** (including zero-leakage regime/sentiment proofs, GARCH mean-reversion tests, benchmark-alpha tests, and a hermetic Python subprocess IPC roundtrip test).
+
+---
+
 ## [0.7.0] — 2026-11-23
 
 Major quantitative modeling, news/event integration, self-calibration, and forecasting upgrade across **Outlook**, **AI Research**, **Local Briefings**, **Prediction Logbook**, and **Forecast Model Guide**.

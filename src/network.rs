@@ -479,13 +479,32 @@ fn daily_scenarios_use_completed_matching_sessions_only() {
 pub fn fetch_review_market(symbol: &str, quote_time: i64) -> Result<ReviewData, String> {
     let mut u = market_url(symbol, 6)?;
     u.set_query(None);
+    let end_ts = now();
     u.query_pairs_mut()
         .append_pair("period1", &(quote_time - DAY).max(0).to_string())
-        .append_pair("period2", &now().to_string())
+        .append_pair("period2", &end_ts.to_string())
         .append_pair("interval", "1d")
         .append_pair("events", "splits")
         .append_pair("includePrePost", "false");
-    parse_review_data(&get_json(u.to_string())?, symbol)
+    let mut data = parse_review_data(&get_json(u.to_string())?, symbol)?;
+    // Best-effort S&P 500 (^GSPC) benchmark closes for excess-return (alpha) scoring.
+    if symbol != "^GSPC"
+        && let Ok(mut bu) = market_url("^GSPC", 6)
+    {
+        bu.set_query(None);
+        bu.query_pairs_mut()
+            .append_pair("period1", &(quote_time - 7 * DAY).max(0).to_string())
+            .append_pair("period2", &end_ts.to_string())
+            .append_pair("interval", "1d")
+            .append_pair("includePrePost", "false");
+        if let Ok(root) = get_json(bu.to_string())
+            && let Ok(bench) = parse_market(&root, "^GSPC", ChartRange::OneYear.index())
+            && !bench.points.is_empty()
+        {
+            data.benchmark = Some(bench.points);
+        }
+    }
+    Ok(data)
 }
 fn parse_review_data(root: &Value, symbol: &str) -> Result<ReviewData, String> {
     let result = chart_result(root, symbol)?;
@@ -531,7 +550,11 @@ fn parse_review_data(root: &Value, symbol: &str) -> Result<ReviewData, String> {
         .into_iter()
         .map(|(time, factor)| StockSplit { time, factor })
         .collect();
-    Ok(ReviewData { market, splits })
+    Ok(ReviewData {
+        market,
+        splits,
+        benchmark: None,
+    })
 }
 fn num(v: &Value, name: &str) -> Option<f64> {
     v.get(name)
@@ -1261,12 +1284,17 @@ pub struct OutlookSnapshot {
     pub conformal_adjustment_pp: f64,
     pub analog_weight: f64,
     pub online_qr_weight: f64,
-    pub ewma_weight: f64,
+    pub garch_weight: f64,
     pub baseline_weight: f64,
     pub ensemble_pinball_pp: f64,
     pub baseline_pinball_pp: f64,
     pub walk_forward_trials: usize,
     pub calibrated_coverage_count: usize,
+    pub sp500_regime_active: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rel_strength_20_percent: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sentiment_pinball_delta_pp: Option<f64>,
 }
 
 impl OutlookSnapshot {
@@ -1282,12 +1310,20 @@ impl OutlookSnapshot {
             conformal_adjustment_pp: (cal.conformal_delta * 1000.0).round() / 10.0,
             analog_weight: (cal.weights.analogs * 100.0).round() / 100.0,
             online_qr_weight: (cal.weights.online_qr * 100.0).round() / 100.0,
-            ewma_weight: (cal.weights.ewma * 100.0).round() / 100.0,
+            garch_weight: (cal.weights.garch * 100.0).round() / 100.0,
             baseline_weight: (cal.weights.baseline * 100.0).round() / 100.0,
             ensemble_pinball_pp: (cal.ensemble_pinball * 10000.0).round() / 100.0,
             baseline_pinball_pp: (cal.baseline_pinball * 10000.0).round() / 100.0,
             walk_forward_trials: cal.trial_count,
             calibrated_coverage_count: cal.calibrated_covered,
+            sp500_regime_active: cal.regime_active,
+            rel_strength_20_percent: scenario
+                .setup
+                .rel_strength_20
+                .map(|v| (v * 1000.0).round() / 10.0),
+            sentiment_pinball_delta_pp: cal
+                .sentiment_pinball_delta
+                .map(|v| (v * 10000.0).round() / 100.0),
         }
     }
 }
