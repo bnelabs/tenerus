@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 390" width="1200" height="390" role="img" aria-label="Tenerus local-first cross-platform desktop architecture">
+  <defs>
+    <marker id="a1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 1 1.5 L 8.5 5 L 1 8.5 z" fill="#9eb0a6"/>
+    </marker>
+    <marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 1 1.5 L 8.5 5 L 1 8.5 z" fill="#246b51"/>
+    </marker>
+    <style>
+      .sans { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    </style>
+  </defs>
+
+  <rect x="1" y="1" width="1198" height="388" rx="16" fill="#f7f8f5" stroke="#dce2dc" stroke-width="1.5"/>
+
+  <text x="34" y="34" class="mono" font-size="11" font-weight="600" letter-spacing="1.2" fill="#194b39">LOCAL-FIRST ARCHITECTURE · ZERO TENERUS SERVERS</text>
+  <text x="34" y="60" class="sans" font-size="21" font-weight="700" fill="#16241d">Data Boundaries &amp; Native Desktop Runtime</text>
+
+  <rect x="886" y="25" width="280" height="30" rx="15" fill="#e4f0ea" stroke="#246b51" stroke-opacity="0.35"/>
+  <text x="1026" y="44" text-anchor="middle" class="mono" font-size="10.8" font-weight="600" fill="#194b39">macOS · Windows · Linux · FreeBSD</text>
+
+  <line x1="34" y1="78" x2="1166" y2="78" stroke="#dce2dc" stroke-width="1"/>
+
+  <text x="34" y="102" class="mono" font-size="11" font-weight="700" letter-spacing="1" fill="#7d8e85">USER-INITIATED INPUTS</text>
+  <text x="338" y="102" class="mono" font-size="11" font-weight="700" letter-spacing="1" fill="#7d8e85">TENERUS DESKTOP BINARY (RUST + EGUI)</text>
+  <text x="894" y="102" class="mono" font-size="11" font-weight="700" letter-spacing="1" fill="#7d8e85">PRIVATE LOCAL STORAGE</text>
+
+  <!-- LEFT: INPUTS -->
+  <rect x="34" y="116" width="254" height="72" rx="10" fill="#ffffff" stroke="#dde3dd" stroke-width="1.2"/>
+  <rect x="46" y="128" width="5" height="48" rx="2.5" fill="#194b39"/>
+  <text x="62" y="146" class="sans" font-size="13" font-weight="700" fill="#16241d">Public Market Feeds</text>
+  <text x="62" y="164" class="sans" font-size="11" fill="#55665d">Yahoo Finance quotes, OHLCV &amp; RSS</text>
+  <text x="62" y="179" class="mono" font-size="9.8" fill="#7d8e85">Direct HTTPS · no proxy server</text>
+
+  <rect x="34" y="200" width="254" height="72" rx="10" fill="#ffffff" stroke="#dde3dd" stroke-width="1.2"/>
+  <rect x="46" y="212" width="5" height="48" rx="2.5" fill="#1e6b6b"/>
+  <text x="62" y="230" class="sans" font-size="13" font-weight="700" fill="#16241d">Optional Daily Imports</text>
+  <text x="62" y="248" class="sans" font-size="11" fill="#55665d">Twelve Data · Alpha Vantage · CSV/JSON</text>
+  <text x="62" y="263" class="mono" font-size="9.8" fill="#7d8e85">Up to 4,000 daily closes / ticker</text>
+
+  <rect x="34" y="284" width="254" height="76" rx="10" fill="#ffffff" stroke="#dde3dd" stroke-width="1.2"/>
+  <rect x="46" y="296" width="5" height="52" rx="2.5" fill="#225c8a"/>
+  <text x="62" y="314" class="sans" font-size="13" font-weight="700" fill="#16241d">BYO AI &amp; Local Pilots</text>
+  <text x="62" y="332" class="sans" font-size="11" fill="#55665d">HTTPS APIs · Codex / Claude / agy CLI</text>
+  <text x="62" y="347" class="mono" font-size="9.8" fill="#7d8e85">Opt-in TimesFM / Chronos-2</text>
+
+  <!-- Arrows Left -> Center -->
+  <line x1="288" y1="152" x2="334" y2="152" stroke="#9eb0a6" stroke-width="1.6" marker-end="url(#a1)"/>
+  <line x1="288" y1="236" x2="334" y2="236" stroke="#9eb0a6" stroke-width="1.6" marker-end="url(#a1)"/>
+  <line x1="292" y1="322" x2="334" y2="322" stroke="#9eb0a6" stroke-width="1.6" marker-end="url(#a1)" marker-start="url(#a1)"/>
+
+  <!-- CENTER: NATIVE RUST CORE -->
+  <rect x="338" y="116" width="504" height="244" rx="12" fill="#ffffff" stroke="#246b51" stroke-width="1.6"/>
+
+  <rect x="354" y="134" width="230" height="82" rx="9" fill="#f1f4f0" stroke="#dde3dd"/>
+  <text x="368" y="157" class="sans" font-size="13.5" font-weight="700" fill="#16241d">Workspace &amp; Charts</text>
+  <text x="368" y="176" class="sans" font-size="11.2" fill="#55665d">Watchlists · 1D–ALL · Volume</text>
+  <text x="368" y="194" class="mono" font-size="9.8" fill="#7d8e85">Extended hours · News · .ics</text>
+
+  <rect x="596" y="134" width="230" height="82" rx="9" fill="#f1f4f0" stroke="#dde3dd"/>
+  <text x="610" y="157" class="sans" font-size="13.5" font-weight="700" fill="#16241d">Outlook Quant Engine</text>
+  <text x="610" y="176" class="sans" font-size="11.2" fill="#55665d">4-Model Ensemble · GARCH(1,1)</text>
+  <text x="610" y="194" class="mono" font-size="9.8" fill="#7d8e85">^GSPC regime · Split-conformal</text>
+
+  <rect x="354" y="228" width="230" height="82" rx="9" fill="#f1f4f0" stroke="#dde3dd"/>
+  <text x="368" y="251" class="sans" font-size="13.5" font-weight="700" fill="#16241d">Prediction Logbook</text>
+  <text x="368" y="270" class="sans" font-size="11.2" fill="#55665d">28 / 180 / 365d split-adjusted</text>
+  <text x="368" y="288" class="mono" font-size="9.8" fill="#7d8e85">^GSPC alpha · Brier · ECE</text>
+
+  <rect x="596" y="228" width="230" height="82" rx="9" fill="#f1f4f0" stroke="#dde3dd"/>
+  <text x="610" y="251" class="sans" font-size="13.5" font-weight="700" fill="#16241d">Native Report Writers</text>
+  <text x="610" y="270" class="sans" font-size="11.2" fill="#55665d">Pure-Rust .xlsx · .pdf · .docx</text>
+  <text x="610" y="288" class="mono" font-size="9.8" fill="#7d8e85">Provenance + educational notice</text>
+
+  <rect x="354" y="322" width="472" height="24" rx="6" fill="#e4f0ea"/>
+  <text x="590" y="338" text-anchor="middle" class="mono" font-size="10" font-weight="600" fill="#194b39">Stdin-piped OS curl · Proto-locked HTTPS · Zero telemetry · No brokerage</text>
+
+  <!-- Arrows Center -> Right -->
+  <line x1="846" y1="152" x2="890" y2="152" stroke="#246b51" stroke-width="1.6" marker-end="url(#a2)" marker-start="url(#a2)"/>
+  <line x1="846" y1="236" x2="890" y2="236" stroke="#246b51" stroke-width="1.6" marker-end="url(#a2)" marker-start="url(#a2)"/>
+  <line x1="846" y1="322" x2="890" y2="322" stroke="#9eb0a6" stroke-width="1.6" marker-end="url(#a1)" marker-start="url(#a1)"/>
+
+  <!-- RIGHT: PRIVATE LOCAL STORAGE -->
+  <rect x="894" y="116" width="272" height="72" rx="10" fill="#ffffff" stroke="#dde3dd" stroke-width="1.2"/>
+  <text x="910" y="144" class="sans" font-size="13" font-weight="700" fill="#16241d">OS App Data Directory</text>
+  <text x="910" y="162" class="sans" font-size="11" fill="#55665d">Watchlists, settings, imports, cache</text>
+  <text x="910" y="178" class="mono" font-size="9.8" fill="#7d8e85">Atomic writes · 0700 / 0600 Unix</text>
+
+  <rect x="894" y="200" width="272" height="72" rx="10" fill="#ffffff" stroke="#dde3dd" stroke-width="1.2"/>
+  <text x="910" y="228" class="sans" font-size="13" font-weight="700" fill="#16241d">Audit &amp; Sentiment History</text>
+  <text x="910" y="246" class="sans" font-size="11" fill="#55665d">Immutable logs &amp; daily news store</text>
+  <text x="910" y="262" class="mono" font-size="9.5" fill="#7d8e85">predictions.json · sentiment-history.json</text>
+
+  <rect x="894" y="284" width="272" height="76" rx="10" fill="#ffffff" stroke="#dde3dd" stroke-width="1.2"/>
+  <text x="910" y="312" class="sans" font-size="13" font-weight="700" fill="#16241d">Secret Isolation</text>
+  <text x="910" y="330" class="sans" font-size="11" fill="#55665d">macOS Keychain or session-only RAM</text>
+  <text x="910" y="346" class="mono" font-size="9.8" fill="#7d8e85">Never written to settings or exports</text>
+</svg>

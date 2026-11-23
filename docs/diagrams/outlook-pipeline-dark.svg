@@ -1,0 +1,195 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 545" width="1200" height="545" role="img" aria-label="Tenerus self-calibrating 4-model walk-forward Outlook pipeline">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 1 1.5 L 8.5 5 L 1 8.5 z" fill="#496356"/>
+    </marker>
+    <marker id="arr-g" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 1 1.5 L 8.5 5 L 1 8.5 z" fill="#4cc38f"/>
+    </marker>
+    <style>
+      .sans { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    </style>
+  </defs>
+
+  <!-- Outer Frame -->
+  <rect x="1" y="1" width="1198" height="543" rx="16" fill="#0e1512" stroke="#22312a" stroke-width="1.5"/>
+
+  <!-- Header -->
+  <text x="34" y="34" class="mono" font-size="11" font-weight="600" letter-spacing="1.2" fill="#4cc38f">OUTLOOK QUANTITATIVE ENGINE · ZERO LOOK-AHEAD BIAS</text>
+  <text x="34" y="61" class="sans" font-size="22" font-weight="700" fill="#edf3ef">Self-Calibrating 4-Model Walk-Forward Pipeline</text>
+
+  <!-- Header Right Badge -->
+  <rect x="880" y="25" width="286" height="32" rx="16" fill="#173327" stroke="#4cc38f" stroke-opacity="0.35"/>
+  <circle cx="898" cy="41" r="4" fill="#4cc38f"/>
+  <text x="910" y="45" class="mono" font-size="11" font-weight="600" fill="#4cc38f">100% Local · Pure Rust · t ≤ anchor</text>
+
+  <line x1="34" y1="80" x2="1166" y2="80" stroke="#22312a" stroke-width="1"/>
+
+  <!-- Column Headers -->
+  <text x="34" y="106" class="mono" font-size="11" font-weight="700" letter-spacing="1" fill="#70857a">01 · CAUSAL INPUTS</text>
+  <text x="316" y="106" class="mono" font-size="11" font-weight="700" letter-spacing="1" fill="#70857a">02 · FOUR PARALLEL MODELS</text>
+  <text x="644" y="106" class="mono" font-size="11" font-weight="700" letter-spacing="1" fill="#70857a">03 · WALK-FORWARD CALIBRATION</text>
+  <text x="928" y="106" class="mono" font-size="11" font-weight="700" letter-spacing="1" fill="#70857a">04 · CALIBRATED OUTPUT</text>
+
+  <!-- ================= STAGE 1: CAUSAL INPUTS ================= -->
+  <rect x="34" y="120" width="242" height="82" rx="11" fill="#141f1b" stroke="#263830" stroke-width="1.2"/>
+  <rect x="46" y="133" width="5" height="56" rx="2.5" fill="#4cc38f"/>
+  <text x="62" y="150" class="sans" font-size="13.5" font-weight="700" fill="#edf3ef">OHLCV Price History</text>
+  <text x="62" y="169" class="sans" font-size="11.5" fill="#9cb0a5">Up to 10y completed daily bars</text>
+  <text x="62" y="187" class="mono" font-size="9.8" fill="#70857a">Mom 5/20/60d · Vol · DD · Range</text>
+
+  <rect x="34" y="214" width="242" height="82" rx="11" fill="#141f1b" stroke="#263830" stroke-width="1.2"/>
+  <rect x="46" y="227" width="5" height="56" rx="2.5" fill="#6cb2eb"/>
+  <text x="62" y="244" class="sans" font-size="13.5" font-weight="700" fill="#edf3ef">S&amp;P 500 Regime (^GSPC)</text>
+  <text x="62" y="263" class="sans" font-size="11.5" fill="#9cb0a5">Cross-asset market context</text>
+  <text x="62" y="281" class="mono" font-size="9.8" fill="#70857a">20d rel. strength · Mkt vol</text>
+
+  <rect x="34" y="308" width="242" height="82" rx="11" fill="#141f1b" stroke="#263830" stroke-width="1.2"/>
+  <rect x="46" y="321" width="5" height="56" rx="2.5" fill="#4dc2be"/>
+  <text x="62" y="338" class="sans" font-size="13.5" font-weight="700" fill="#edf3ef">Daily News Store</text>
+  <text x="62" y="357" class="sans" font-size="11.5" fill="#9cb0a5">Local sentiment-history.json</text>
+  <text x="62" y="375" class="mono" font-size="9.8" fill="#70857a">14d causal tone · Earnings gap</text>
+
+  <rect x="34" y="406" width="242" height="56" rx="11" fill="#1a2822" stroke="#263830" stroke-width="1.2"/>
+  <text x="50" y="429" class="mono" font-size="10.8" font-weight="700" fill="#4cc38f">10-FEATURE CAUSAL VECTOR</text>
+  <text x="50" y="447" class="sans" font-size="11" fill="#9cb0a5">Standardized strictly on prior bars</text>
+
+  <!-- Connectors Stage 1 -> Stage 2 -->
+  <path d="M 276 161 C 296 161, 294 158, 313 158" fill="none" stroke="#496356" stroke-width="1.5" marker-end="url(#arr)"/>
+  <path d="M 276 255 C 296 255, 294 246, 313 246" fill="none" stroke="#496356" stroke-width="1.5" marker-end="url(#arr)"/>
+  <path d="M 276 349 C 296 349, 294 334, 313 334" fill="none" stroke="#496356" stroke-width="1.5" marker-end="url(#arr)"/>
+  <path d="M 276 434 C 296 434, 294 422, 313 422" fill="none" stroke="#496356" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ================= STAGE 2: 4 PARALLEL MODELS ================= -->
+  <rect x="316" y="120" width="286" height="76" rx="11" fill="#141f1b" stroke="#263830" stroke-width="1.2"/>
+  <rect x="330" y="134" width="32" height="22" rx="6" fill="#173327"/>
+  <text x="346" y="149" text-anchor="middle" class="mono" font-size="11" font-weight="700" fill="#4cc38f">M1</text>
+  <text x="372" y="149" class="sans" font-size="13.5" font-weight="700" fill="#edf3ef">Kernel &amp; Recency Analogs</text>
+  <text x="330" y="170" class="sans" font-size="11.3" fill="#9cb0a5">Non-overlapping matches · exp distance decay</text>
+  <text x="330" y="186" class="mono" font-size="10" fill="#70857a">Weighted empirical 10th / 50th / 90th</text>
+
+  <rect x="316" y="208" width="286" height="76" rx="11" fill="#141f1b" stroke="#263830" stroke-width="1.2"/>
+  <rect x="330" y="222" width="32" height="22" rx="6" fill="#162a3d"/>
+  <text x="346" y="237" text-anchor="middle" class="mono" font-size="11" font-weight="700" fill="#6cb2eb">M2</text>
+  <text x="372" y="237" class="sans" font-size="13.5" font-weight="700" fill="#edf3ef">Online Quantile Regression</text>
+  <text x="330" y="258" class="sans" font-size="11.3" fill="#9cb0a5">10-feature L2 AdaGrad trained sequentially</text>
+  <text x="330" y="274" class="mono" font-size="10" fill="#70857a">Walk-forward news ablation (Δ pinball)</text>
+
+  <rect x="316" y="296" width="286" height="76" rx="11" fill="#141f1b" stroke="#263830" stroke-width="1.2"/>
+  <rect x="330" y="310" width="32" height="22" rx="6" fill="#143030"/>
+  <text x="346" y="325" text-anchor="middle" class="mono" font-size="11" font-weight="700" fill="#4dc2be">M3</text>
+  <text x="372" y="325" class="sans" font-size="13.5" font-weight="700" fill="#edf3ef">GARCH(1,1) + Cornish-Fisher</text>
+  <text x="330" y="346" class="sans" font-size="11.3" fill="#9cb0a5">Mean-reverting multi-step variance V_h</text>
+  <text x="330" y="362" class="mono" font-size="10" fill="#70857a">α=0.08 · β=0.88 · fat tails + skew tilt</text>
+
+  <rect x="316" y="384" width="286" height="78" rx="11" fill="#141f1b" stroke="#263830" stroke-width="1.2"/>
+  <rect x="330" y="398" width="32" height="22" rx="6" fill="#1e2c26"/>
+  <text x="346" y="413" text-anchor="middle" class="mono" font-size="11" font-weight="700" fill="#9db0a6">M4</text>
+  <text x="372" y="413" class="sans" font-size="13.5" font-weight="700" fill="#edf3ef">Unconditional Baseline</text>
+  <text x="330" y="434" class="sans" font-size="11.3" fill="#9cb0a5">All prior non-overlapping horizon returns</text>
+  <text x="330" y="450" class="mono" font-size="10" fill="#70857a">Automatic shrinkage anchor vs overfitting</text>
+
+  <!-- Connectors Stage 2 -> Stage 3 -->
+  <path d="M 602 158 C 624 158, 622 186, 641 186" fill="none" stroke="#496356" stroke-width="1.5" marker-end="url(#arr)"/>
+  <path d="M 602 246 C 622 246, 624 214, 641 214" fill="none" stroke="#496356" stroke-width="1.5" marker-end="url(#arr)"/>
+  <path d="M 602 334 C 622 334, 624 240, 641 240" fill="none" stroke="#496356" stroke-width="1.5" marker-end="url(#arr)"/>
+  <path d="M 602 422 C 624 422, 622 264, 641 264" fill="none" stroke="#496356" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ================= STAGE 3: WALK-FORWARD SELF-CALIBRATION ================= -->
+  <rect x="644" y="120" width="242" height="176" rx="11" fill="#141f1b" stroke="#263830" stroke-width="1.2"/>
+  <text x="660" y="144" class="sans" font-size="13.5" font-weight="700" fill="#edf3ef">Pinball-Loss Hedge Blend</text>
+  <text x="660" y="162" class="sans" font-size="11" fill="#9cb0a5">Scored across up to 36 past dates</text>
+
+  <text x="660" y="188" class="mono" font-size="10.2" fill="#9cb0a5">Analogs</text>
+  <rect x="728" y="178" width="110" height="11" rx="5.5" fill="#1e2d27"/>
+  <rect x="728" y="178" width="70" height="11" rx="5.5" fill="#4cc38f"/>
+  <text x="872" y="188" text-anchor="end" class="mono" font-size="10.2" font-weight="600" fill="#edf3ef">32%</text>
+
+  <text x="660" y="210" class="mono" font-size="10.2" fill="#9cb0a5">Baseline</text>
+  <rect x="728" y="200" width="110" height="11" rx="5.5" fill="#1e2d27"/>
+  <rect x="728" y="200" width="57" height="11" rx="5.5" fill="#9db0a6"/>
+  <text x="872" y="210" text-anchor="end" class="mono" font-size="10.2" font-weight="600" fill="#edf3ef">26%</text>
+
+  <text x="660" y="232" class="mono" font-size="10.2" fill="#9cb0a5">GARCH</text>
+  <rect x="728" y="222" width="110" height="11" rx="5.5" fill="#1e2d27"/>
+  <rect x="728" y="222" width="52" height="11" rx="5.5" fill="#4dc2be"/>
+  <text x="872" y="232" text-anchor="end" class="mono" font-size="10.2" font-weight="600" fill="#edf3ef">24%</text>
+
+  <text x="660" y="254" class="mono" font-size="10.2" fill="#9cb0a5">Online QR</text>
+  <rect x="728" y="244" width="110" height="11" rx="5.5" fill="#1e2d27"/>
+  <rect x="728" y="244" width="40" height="11" rx="5.5" fill="#6cb2eb"/>
+  <text x="872" y="254" text-anchor="end" class="mono" font-size="10.2" font-weight="600" fill="#edf3ef">18%</text>
+
+  <text x="660" y="282" class="sans" font-size="10.5" fill="#70857a">Illustrative weights; shift automatically</text>
+
+  <!-- Vertical flow arrow 3A -> 3B -->
+  <line x1="765" y1="296" x2="765" y2="313" stroke="#4cc38f" stroke-width="1.6" marker-end="url(#arr-g)"/>
+
+  <rect x="644" y="317" width="242" height="145" rx="11" fill="#141f1b" stroke="#263830" stroke-width="1.2"/>
+  <text x="660" y="341" class="sans" font-size="13.5" font-weight="700" fill="#edf3ef">Split-Conformal Band</text>
+  <text x="660" y="358" class="sans" font-size="11" fill="#9cb0a5">Finite-sample 80% coverage target</text>
+
+  <line x1="660" y1="398" x2="870" y2="398" stroke="#202f28" stroke-width="2" stroke-linecap="round"/>
+  <rect x="676" y="390" width="178" height="16" rx="8" fill="#173327" stroke="#4cc38f" stroke-width="1.2"/>
+  <rect x="712" y="393" width="106" height="10" rx="5" fill="#4cc38f" fill-opacity="0.35"/>
+  <circle cx="765" cy="398" r="4" fill="#edf3ef"/>
+  <text x="694" y="383" text-anchor="middle" class="mono" font-size="10" font-weight="700" fill="#e37b6c">−δ</text>
+  <text x="765" y="383" text-anchor="middle" class="mono" font-size="9.8" fill="#9cb0a5">raw [q10, q90]</text>
+  <text x="836" y="383" text-anchor="middle" class="mono" font-size="10" font-weight="700" fill="#4cc38f">+δ</text>
+
+  <text x="660" y="428" class="mono" font-size="9.8" fill="#70857a">δ = Q_0.80 of prior OOS residuals</text>
+  <text x="660" y="446" class="sans" font-size="10.8" fill="#9cb0a5">Widens when raw intervals undercover</text>
+
+  <!-- Connector Stage 3 -> Stage 4 -->
+  <path d="M 886 388 C 906 388, 904 290, 924 290" fill="none" stroke="#4cc38f" stroke-width="1.8" marker-end="url(#arr-g)"/>
+
+  <!-- ================= STAGE 4: CALIBRATED OUTPUT (MINI FAN CHART) ================= -->
+  <rect x="928" y="120" width="238" height="342" rx="11" fill="#141f1b" stroke="#4cc38f" stroke-width="1.5"/>
+  <text x="944" y="144" class="sans" font-size="13.5" font-weight="700" fill="#edf3ef">Calibrated Scenario Fan</text>
+  <text x="944" y="162" class="sans" font-size="11" fill="#9cb0a5">5, 20, or 60 completed sessions</text>
+
+  <rect x="942" y="176" width="210" height="156" rx="8" fill="#0e1512" stroke="#202f28" stroke-width="1"/>
+  <line x1="950" y1="210" x2="1144" y2="210" stroke="#202f28" stroke-width="1"/>
+  <line x1="950" y1="252" x2="1144" y2="252" stroke="#202f28" stroke-width="1"/>
+  <line x1="950" y1="294" x2="1144" y2="294" stroke="#202f28" stroke-width="1"/>
+  <line x1="1036" y1="184" x2="1036" y2="324" stroke="#70857a" stroke-width="1" stroke-dasharray="3 3"/>
+
+  <path d="M 1036 258 L 1061 238 L 1086 222 L 1111 212 L 1136 202 L 1136 294 L 1111 291 L 1086 286 L 1061 277 L 1036 258 Z" fill="rgba(76, 195, 143, 0.18)"/>
+
+  <path d="M 952 296 L 968 282 L 982 287 L 997 268 L 1011 274 L 1024 262 L 1036 258" fill="none" stroke="#edf3ef" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <path d="M 1036 258 L 1061 238 L 1086 222 L 1111 212 L 1136 202" fill="none" stroke="#4cc38f" stroke-width="1.6"/>
+  <path d="M 1036 258 L 1061 254 L 1086 250 L 1111 247 L 1136 244" fill="none" stroke="#edf3ef" stroke-width="2"/>
+  <path d="M 1036 258 L 1061 277 L 1086 286 L 1111 291 L 1136 294" fill="none" stroke="#e37b6c" stroke-width="1.6"/>
+
+  <path d="M 1036 258 Q 1086 218, 1136 210" fill="none" stroke="#6cb2eb" stroke-width="1.3" stroke-dasharray="4 3"/>
+  <path d="M 1036 258 Q 1086 247, 1136 238" fill="none" stroke="#6cb2eb" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <path d="M 1036 258 Q 1086 283, 1136 287" fill="none" stroke="#6cb2eb" stroke-width="1.3" stroke-dasharray="4 3"/>
+
+  <circle cx="1036" cy="258" r="3.5" fill="#edf3ef"/>
+  <circle cx="1136" cy="202" r="3" fill="#4cc38f"/>
+  <circle cx="1136" cy="244" r="3" fill="#edf3ef"/>
+  <circle cx="1136" cy="294" r="3" fill="#e37b6c"/>
+
+  <text x="1036" y="320" text-anchor="middle" class="mono" font-size="9.2" fill="#70857a">anchor</text>
+  <text x="1132" y="195" text-anchor="end" class="mono" font-size="9.5" font-weight="700" fill="#4cc38f">90th</text>
+  <text x="1132" y="309" text-anchor="end" class="mono" font-size="9.5" font-weight="700" fill="#e37b6c">10th</text>
+
+  <line x1="944" y1="350" x2="960" y2="350" stroke="#4cc38f" stroke-width="2.5"/>
+  <text x="966" y="354" class="sans" font-size="10.8" fill="#9cb0a5">Outlook 80% calibrated band</text>
+
+  <line x1="944" y1="370" x2="960" y2="370" stroke="#6cb2eb" stroke-width="2" stroke-dasharray="4 2"/>
+  <text x="966" y="374" class="sans" font-size="10.8" fill="#9cb0a5">Opt-in TimesFM / Chronos-2</text>
+
+  <rect x="942" y="388" width="210" height="28" rx="7" fill="#173327"/>
+  <text x="1047" y="406" text-anchor="middle" class="mono" font-size="10.2" font-weight="600" fill="#4cc38f">Pinball Skill · Coverage · MAE</text>
+
+  <rect x="942" y="422" width="210" height="28" rx="7" fill="#361e1b"/>
+  <text x="1047" y="440" text-anchor="middle" class="mono" font-size="10.2" font-weight="600" fill="#e37b6c">Earnings-in-Horizon Gap Warning</text>
+
+  <!-- Bottom Causal Guarantee Banner -->
+  <rect x="34" y="484" width="1132" height="38" rx="9" fill="#1a2822" stroke="#22312a" stroke-width="1"/>
+  <text x="54" y="507" class="mono" font-size="11" font-weight="700" fill="#4cc38f">CAUSAL INVARIANT</text>
+  <text x="190" y="507" class="sans" font-size="11.2" fill="#9cb0a5">Every feature, Online QR update, Hedge weight, conformal residual, and historical replay uses strictly prior completed closes (end &lt; anchor).</text>
+</svg>

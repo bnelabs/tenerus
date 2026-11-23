@@ -1,98 +1,126 @@
 <div align="center">
-  <img src="assets/tenerus-icon-256.png" alt="Tenerus App Icon" width="112" height="112" />
+  <img src="assets/tenerus-icon-256.png" alt="Tenerus App Icon" width="108" height="108" />
   <h1>Tenerus</h1>
-  <p><strong>A local-first native desktop market research &amp; historical scenario workspace built in Rust — for macOS, Windows, Linux, and FreeBSD.</strong></p>
+  <p><strong>A local-first native desktop market research &amp; self-calibrating scenario workspace in Rust — for macOS, Windows, Linux, and FreeBSD.</strong></p>
   <p>
-    <a href="https://github.com/bnelabs/tenerus/releases"><img src="https://img.shields.io/badge/release-v0.8.0-1c4f3c?style=flat-square" alt="Release v0.8.0" /></a>
+    <a href="https://github.com/bnelabs/tenerus/releases"><img src="https://img.shields.io/badge/release-v0.8.0-194b39?style=flat-square" alt="Release v0.8.0" /></a>
     <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20(x64%2FARM64)%20%7C%20Linux%20(x64%2FARM64)%20%7C%20FreeBSD-182d26?style=flat-square" alt="Supported Platforms" />
-    <img src="https://img.shields.io/badge/built%20with-Rust%20%2B%20egui-27674f?style=flat-square" alt="Rust + egui" />
+    <img src="https://img.shields.io/badge/Rust%20%2B%20egui-137%20tests-27674f?style=flat-square" alt="Rust + egui · 137 tests" />
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-54675e?style=flat-square" alt="MIT License" /></a>
     <img src="https://img.shields.io/badge/use-Educational%20Only-ab493b?style=flat-square" alt="Educational Use Only" />
+  </p>
+  <p>
+    <a href="#why-tenerus">Why Tenerus</a> ·
+    <a href="#visual-tour">Visual Tour</a> ·
+    <a href="#how-it-works">How It Works</a> ·
+    <a href="#download--install">Download</a> ·
+    <a href="#build--run-from-source">Build</a> ·
+    <a href="#security--privacy">Security</a>
   </p>
 </div>
 
 > [!CAUTION]
 > **SOLELY FOR EDUCATIONAL AND RESEARCH PURPOSES — NOT FOR REAL TRADING OR INVESTING.**
 >
-> Tenerus is an independent educational workspace for studying historical price patterns, inspecting how statistical ranges behave out-of-sample, and evaluating AI reasoning against transparent baselines. **Nothing in Tenerus is financial advice, an investment recommendation, or an offer to buy or sell any security.** Market data may be delayed, incomplete, or inaccurate; historical analogues and AI confidence scores do not predict future returns. Tenerus has no brokerage integration and cannot place orders. **Do not use Tenerus for real investment or trading decisions.**
+> Tenerus is an independent educational workspace for studying historical price distributions, testing calibrated statistical ranges out-of-sample, and auditing AI-assisted market commentary against transparent baselines. **Nothing in Tenerus is financial advice, an investment recommendation, or an offer to buy or sell any security.** Market feeds may be delayed, incomplete, or inaccurate; historical analogues, foundation models, and AI confidence percentages do not predict future returns. Tenerus has no brokerage integration and cannot place orders. **Do not use Tenerus for real investment or trading decisions.**
 
 <p align="center">
-  <img src="docs/screenshots/outlook.png" alt="Tenerus Outlook view showing historical scenario fan chart, watchlist, and local briefing rail" width="100%" />
+  <img src="docs/screenshots/outlook.png" alt="Tenerus Outlook showing calibrated 4-model ensemble fan chart, pinball skill, GARCH weights, and local briefing rail" width="100%" />
   <br />
-  <sub><em>Tenerus Outlook (Offline demonstration mode with clearly labeled illustrative sample data).</em></sub>
+  <sub><em>Tenerus Outlook in offline demonstration mode (clearly labeled illustrative sample data).</em></sub>
 </p>
 
 ---
 
-## What is Tenerus?
+## Why Tenerus?
 
-Named after **Tenerus**—the prophetic demigod son of Apollo in Greek mythology—Tenerus is a fast, native desktop application for **macOS, Windows (x86_64 & ARM64), Linux (Ubuntu, Fedora, Arch — x86_64 & ARM64), and FreeBSD** built to **explore market history, compare price setups, and audit AI-assisted market commentary** entirely locally.
+Named after **Tenerus**—the prophetic demigod son of Apollo in Greek mythology—Tenerus is a fast, native desktop workspace for **macOS, Windows (`x86_64` & `ARM64`), Linux (Ubuntu, Fedora, Arch — `x86_64` & `ARM64`), and FreeBSD (`amd64`)**.
 
-Instead of presenting opaque "price predictions," Tenerus focuses on **transparent historical context and accountability**:
+Instead of presenting opaque price targets, Tenerus treats market analysis as a **falsifiable, strictly causal scientific workflow**:
 
-- **See what followed similar market conditions:** Compare a ticker's current momentum, volatility, and drawdown against up to 10 years of completed daily closes to plot the 10th, 50th, and 90th percentile outcomes.
-- **Test models against reality, not hype:** Every AI outlook is logged locally with its reference price, reasoning, and subjective confidence %, then automatically checked against actual split-adjusted closes at **28, 180, and 365 days** and benchmarked against naive **Always BUY / Always SELL / Always WAIT** baselines.
-- **Keep everything local:** Watchlists, imports, logs, and settings stay on your device. There are no Tenerus backend servers, accounts, or telemetry.
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Self-Calibrating 4-Model Outlook</strong><br />
+      Blends <em>Kernel/Recency Analogs</em>, <em>10-Feature Online Quantile Regression</em>, <em>Mean-Reverting GARCH(1,1)</em>, and an <em>Unconditional Baseline</em> using out-of-sample pinball-loss Hedge weights and split-conformal 80% calibration across 5, 20, or 60 sessions.
+    </td>
+    <td width="50%" valign="top">
+      <strong>Cross-Asset Regime &amp; News Ablation</strong><br />
+      Pulls S&amp;P 500 (<code>^GSPC</code>) relative strength and market volatility alongside a zero-dependency local headline scorer (<code>sentiment-history.json</code>), earnings-in-horizon gap warnings, and walk-forward ablation measuring whether stored news actually reduces error.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Prediction Logbook &amp; <code>^GSPC</code> Alpha</strong><br />
+      Every AI decision is logged immutably to <code>predictions.json</code>, split-adjusted and checked at 28, 180, and 365 days, and scored against <strong>Always BUY / SELL / WAIT</strong> baselines, excess return vs. <code>^GSPC</code>, <strong>Brier Score</strong>, and <strong>Expected Calibration Error (ECE)</strong>.
+    </td>
+    <td width="50%" valign="top">
+      <strong>Opt-In TimesFM &amp; Chronos-2 Pilots</strong><br />
+      Run local <strong>TimesFM 2.5/3.0</strong> or <strong>Amazon Chronos-2</strong> Python pilots on demand: executes batched non-overlapping walk-forward cutoffs + split-conformal calibration in one load, scores apples-to-apples against Outlook, and overlays bounds on the chart.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Bring-Your-Own AI &amp; Local CLI Briefings</strong><br />
+      Connect directly to <strong>OpenAI, Anthropic, Google, Grok · xAI, DeepSeek, NVIDIA, Meta</strong>, or custom/localhost endpoints—or trigger evidence-cited local briefings via installed <strong>Codex</strong>, <strong>Claude Code</strong>, or <strong>Antigravity</strong> CLIs.
+    </td>
+    <td width="50%" valign="top">
+      <strong>Custom Imports &amp; Portable Reports</strong><br />
+      Import up to 4,000 daily OHLCV bars per ticker from <strong>Twelve Data</strong>, <strong>Alpha Vantage</strong>, CSV/JSON, or custom HTTPS endpoints. Export Outlook or AI research to <strong>Excel (<code>.xlsx</code>)</strong>, <strong>PDF (<code>.pdf</code>)</strong>, or <strong>Word (<code>.docx</code>)</strong> on every OS.
+    </td>
+  </tr>
+</table>
 
 ---
 
-## Key Features
-
-| Area | What it does |
-| --- | --- |
-| **Outlook (Self-Calibrating Scenarios)** | Strictly causal 4-model ensemble (**kernel/recency-weighted multivariable analogs with S&P 500 regime**, **10-feature online L2 quantile regression with causal daily news ablation**, **mean-reverting GARCH(1,1) fat-tailed volatility**, and **unconditional baseline**) blended by walk-forward **pinball loss** with **split-conformal interval calibration** across **5, 20, or 60 sessions** (*Beginner*, *Expert*, and *Market god* replay & stress views). |
-| **News & Event Signal Analyzer** | Local zero-dependency headline polarity scorer, financial event tagger (*Earnings, Guidance, Analyst, M&A, Regulatory, Macro*), persisted daily sentiment store (`sentiment-history.json`) with walk-forward ablation, and **earnings-in-horizon gap-risk detector** surfaced in Outlook, local CLI briefings (`E7`), AI Research, and exported reports. |
-| **Price, Charts & News** | Multi-watchlist sidebar with drag-to-reorder and per-list sorting, 11 chart ranges (`1D`–`ALL`), volume & extended-hours toggles, optional fundamentals, public publisher headlines, saved stories, and tentative `.ics` earnings calendar export. |
-| **Local Assistant Briefings** | Run structured, evidence-cited briefings directly through locally installed CLIs (**Codex**, **Claude Code**, or **Antigravity**) using any valid CLI sign-in or API-key auth you configured locally. |
-| **Bring-Your-Own AI Research & Local Foundation Pilots** | Connect directly to **OpenAI, Anthropic, Google, Grok · xAI, DeepSeek, NVIDIA, Meta**, or **Custom / localhost** endpoints (receiving full-window quant summaries, calibrated Outlook bands, news/event signals, and calibration history), plus opt-in local **TimesFM 2.5/3.0** and **Chronos-2** Python pilots with batched walk-forward split-conformal calibration, side-by-side Outlook scoreboards, and chart overlays. |
-| **Prediction Logbook & Calibration Engine** | Append-only local `predictions.json` audit log with split-adjusted 28/180/365-day reviews, **excess return vs. S&P 500 (`^GSPC` benchmark alpha)**, **Always BUY / SELL / WAIT** baselines, **Brier Score**, **Expected Calibration Error (ECE)**, stated-vs-actual confidence buckets, mean returns per decision, and same-ticker-prioritized rolling context memory. |
-| **Custom Data Imports & Exports** | Import up to 4,000 daily closes per ticker from **Twelve Data**, **Alpha Vantage**, local **CSV/JSON** files, or a custom HTTPS/localhost endpoint. Export Outlook or AI research reports to **Excel (`.xlsx`)**, **PDF (`.pdf`)**, or **Word (`.docx`)** on every supported OS, with timestamps and educational-use notices. |
-
----
-
-## Visual Walkthrough
+## Visual Tour
 
 <table>
   <tr>
     <td width="50%">
-      <img src="docs/screenshots/prices-ai.png" alt="Tenerus Price, interactive chart, and AI Outlook panel" />
+      <img src="docs/screenshots/prices-ai.png" alt="Tenerus Price, interactive chart, and AI Research panel" />
       <br />
-      <strong>Price, Charts &amp; AI Research</strong> — Interactive <code>1D</code>–<code>ALL</code> charts, extended-hours and volume controls, fundamentals, and structured short/medium/long-term AI research cards.
+      <strong>Price, Charts &amp; AI Research</strong> — Interactive <code>1D</code>–<code>ALL</code> charts, volume &amp; extended-hours toggles, fundamentals, and structured 3-horizon AI research.
     </td>
     <td width="50%">
       <img src="docs/screenshots/market-god.png" alt="Tenerus Market god historical replay and stress testing" />
       <br />
-      <strong>Historical Replay &amp; Stress Testing</strong> — Pick a past trading date, inspect the range estimated using only prior history, reveal what actually happened, and stress-test tail returns.
+      <strong>Historical Replay &amp; Tail Stress</strong> — Pick any past cutoff date, inspect the range estimated strictly from prior history, reveal what happened, and stress-test tail returns.
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <img src="docs/screenshots/connections.png" alt="Tenerus AI Connections setup dialog" />
+      <img src="docs/screenshots/logbook.png" alt="Tenerus Prediction Logbook, baselines, and calibration engine" />
       <br />
-      <strong>Bring Your Own Intelligence</strong> — Configure OpenAI, Anthropic, Google, Grok · xAI, DeepSeek, NVIDIA, Meta, or localhost endpoints with zero plaintext secret files.
+      <strong>Prediction Logbook &amp; Calibration</strong> — Audit every AI call at 28/180/365 days against Always BUY/SELL/WAIT baselines, <code>^GSPC</code> alpha, Brier score, and ECE.
     </td>
     <td width="50%">
-      <img src="docs/screenshots/logbook.png" alt="Tenerus Prediction Logbook and Model Comparisons" />
+      <img src="docs/screenshots/models.png" alt="Tenerus Forecast Model Guide for opt-in local TimesFM 3.0 and Chronos-2 pilots" />
       <br />
-      <strong>Prediction Logbook &amp; Baselines</strong> — Audit every AI call at 28/180/365 days, compare against Always BUY/SELL/WAIT baselines, and control rolling context memory.
+      <strong>Local Foundation Model Guide</strong> — Check device readiness and run opt-in local <strong>TimesFM 2.5/3.0</strong> or <strong>Chronos-2</strong> walk-forward conformal pilots scored against Outlook.
     </td>
   </tr>
 </table>
 
 <details>
-  <summary><strong>View About Dialog &amp; First-Launch Educational Disclaimer Gate</strong></summary>
+  <summary><strong>More screenshots — AI Connections, About Tenerus &amp; First-Launch Disclaimer Gate</strong></summary>
   <br />
   <table>
     <tr>
-      <td width="50%">
+      <td width="33%">
+        <img src="docs/screenshots/connections.png" alt="Tenerus AI Connections setup dialog" />
+        <br />
+        <sub><em><strong>AI Connections</strong> — Bring your own provider or localhost endpoint with zero plaintext key files.</em></sub>
+      </td>
+      <td width="33%">
         <img src="docs/screenshots/about.png" alt="About Tenerus dialog showing cross-platform info and educational notice" />
         <br />
-        <sub><em><strong>About Tenerus</strong> — Displays version, OS/architecture, educational-use notice, and data boundaries.</em></sub>
+        <sub><em><strong>About Tenerus</strong> — Active version, OS/architecture, data boundaries, and educational notice.</em></sub>
       </td>
-      <td width="50%">
+      <td width="33%">
         <img src="docs/screenshots/welcome.png" alt="Tenerus first-launch Educational Use and Disclaimer modal" />
         <br />
-        <sub><em><strong>First-Launch Gate</strong> — Users must review and accept the educational-use terms before entering the workspace.</em></sub>
+        <sub><em><strong>First-Launch Gate</strong> — Mandatory one-time educational disclaimer before entering the workspace.</em></sub>
       </td>
     </tr>
   </table>
@@ -102,66 +130,53 @@ Instead of presenting opaque "price predictions," Tenerus focuses on **transpare
 
 ## How It Works
 
-### 1. Local-First Cross-Platform Architecture & Data Boundaries
+### 1. Local-First Cross-Platform Architecture
 
-Tenerus runs natively in Rust on **macOS, Windows, Linux, and FreeBSD** with **no intermediary Tenerus server**. All calculations, OpenGL/egui rendering, scenario matching, logbook scoring, and report generation happen locally on your device.
+Tenerus compiles to a single native Rust binary across **macOS, Windows, Linux, and FreeBSD** with **no Tenerus backend servers, accounts, or telemetry**.
 
-```mermaid
-flowchart LR
-    subgraph Sources["External & Local Inputs (User-Initiated)"]
-        YF["Yahoo Finance<br/>(Public quotes, history, RSS)"]
-        IMP["Optional Daily Imports<br/>(Twelve Data / Alpha Vantage / CSV / JSON / HTTPS)"]
-        AI["Optional AI Providers<br/>(BYO API Keys or Local CLI: Codex / Claude / agy)"]
-    end
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/architecture-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="docs/diagrams/architecture-light.svg" />
+    <img src="docs/diagrams/architecture-light.svg" alt="Tenerus local-first architecture showing direct inputs, native Rust modules, and private local storage" width="100%" />
+  </picture>
+</p>
 
-    subgraph App["Tenerus Desktop App (Rust + egui · macOS / Windows / Linux / FreeBSD)"]
-        UI["Workspace UI<br/>Watchlists · Charts · Outlook · Research"]
-        ENG["Local Scenario Engine<br/>Analog Matching · Replay · Percentiles"]
-        LOG["Prediction Logbook<br/>28/180/365d Split-Adjusted Checks"]
-        EXP["Report Writers<br/>PDF · OOXML .xlsx & .docx"]
-    end
+---
 
-    subgraph Storage["Private Local Storage"]
-        DIR["OS App Data Directory<br/>(settings, cache, imports, predictions.json)"]
-        SEC["Secret Storage<br/>(macOS Keychain or Session Memory)"]
-    end
+### 2. How Self-Calibrating Scenarios (*Outlook*) Work
 
-    YF -->|"Direct HTTPS"| UI
-    IMP -->|"On-demand fetch / file read"| ENG
-    UI <--> ENG
-    UI <--> LOG
-    UI --> EXP
-    UI <-->|"Direct HTTPS / localhost<br/>(stdin-piped curl, no CLI arg leaks)"| AI
-    ENG <--> DIR
-    LOG <--> DIR
-    UI <--> SEC
-```
+Outlook evaluates every ticker with a **4-model strictly causal walk-forward pipeline** written in pure Rust—zero look-ahead bias, zero black boxes, and automatic shrinkage toward the unconditional baseline whenever complex models lose out-of-sample:
 
-### 2. How Self-Calibrating Scenarios (*Outlook*) Are Calculated
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/outlook-pipeline-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="docs/diagrams/outlook-pipeline-light.svg" />
+    <img src="docs/diagrams/outlook-pipeline-light.svg" alt="Tenerus self-calibrating 4-model walk-forward Outlook pipeline from causal inputs through parallel models, Hedge blending, split-conformal calibration, and calibrated fan output" width="100%" />
+  </picture>
+</p>
 
-Outlook runs a deterministic, inspectable **4-model strictly causal walk-forward ensemble** on completed daily OHLCV history (with zero look-ahead bias):
+| Model | What It Captures | How It Self-Calibrates | Built-In Guardrail |
+| :--- | :--- | :--- | :--- |
+| **M1 · Kernel &amp; Recency Analogs** | Volatility-normalized 5d/20d/60d momentum, vol ratio, 60d drawdown, OHLCV ratios, and `^GSPC` regime | Exponential kernel &amp; recency weights (`n_eff` reported) over non-overlapping past matches | Strictly prior windows (`end < anchor`); never overlaps match outcomes |
+| **M2 · Online Quantile Regression** | 10-feature standardized vector including `^GSPC` regime and causal 14-day decayed news tone | Sequential forward-only AdaGrad updates minimizing 10th/50th/90th pinball loss with L2 penalty | Clean walk-forward ablation (`News Δ pp`) exposes whether stored headlines actually helped |
+| **M3 · GARCH(1,1) + Cornish-Fisher** | Volatility clustering and return asymmetry (`α = 0.08`, `β = 0.88`, `ω = 0.04 · σ̄²`) | Analytical multi-step cumulative variance $V_h$ with fat tails and causal 60d skewness tilt | Mean-reverts toward long-run variance after shocks instead of exploding over 60 sessions |
+| **M4 · Unconditional Baseline** | Empirical 10th/50th/90th returns across all prior non-overlapping periods | Automatic benchmark inside Hedge weighting and walk-forward Pinball Skill scoring | Absorbs ensemble weight automatically whenever conditioned models underperform |
 
-```mermaid
-flowchart TD
-    A["Up to 10 years of completed daily OHLCV bars<br/>+ S&P 500 (^GSPC) regime + persisted daily news history"] --> B["Extract 10 strictly causal features:<br/>• 5d / 20d / 60d momentum, 60d drawdown, 20d vol & 5d/20d vol ratio<br/>• 5d/20d volume & OHLC range ratios<br/>• 20d relative strength vs ^GSPC, S&P 500 vol & causal 14d news tone"]
-    B --> C["Run 4 strictly causal models on prior non-overlapping windows:<br/>1. Kernel + recency-weighted multivariable analogs<br/>2. 10-feature Online L2 quantile regression (+ news ablation)<br/>3. Mean-reverting GARCH(1,1) fat-tailed skew-adjusted volatility<br/>4. Unconditional historical baseline"]
-    C --> D["Walk-forward out-of-sample replay (up to 36 past dates):<br/>Score every model with Pinball Loss & Hedge-blend weights"]
-    D --> E["Split-conformal interval calibration:<br/>Adjust 10th/90th band from past out-of-sample residuals"]
-    E --> F["Surface calibrated 5 / 20 / 60-session fan +<br/>optional TimesFM / Chronos-2 conformal overlay & earnings gap warnings"]
-```
+- **Zero look-ahead leakage:** In both live projections and *Market god* historical replays, mutating future ticker closes, future `^GSPC` prices, or future news entries has **exact zero effect** on the historical band (enforced in automated tests).
+- **True statistical self-calibration:** Across up to **36 non-overlapping past cutoffs**, Hedge exponential weights shift toward whichever component achieved the lowest out-of-sample pinball loss, while finite-sample **split-conformal calibration** adjusts the 10th/90th interval width toward empirical 80% coverage.
+- **Explicit data provenance:** Every chart, local briefing (`E1`–`E7`), and exported `.xlsx` / `.pdf` / `.docx` report labels whether it used public feeds, imported closes, or offline simulated sample data.
 
-- **Zero look-ahead leakage:** In both live forecasts and *Market god* historical replays, every feature, online quantile regression weight, Hedge model weight, and conformal residual uses **strictly prior completed outcomes** (`end < anchor`).
-- **True statistical self-calibration:** As new daily closes arrive, the online quantile regression updates sequentially, Hedge weights automatically shift toward whichever component achieved the lowest out-of-sample pinball loss, and split-conformal calibration adjusts interval width toward honest empirical 80% coverage.
-- **Explicit data provenance:** Every chart, briefing, and exported report labels whether it used public feeds, imported daily closes, or offline simulated sample data.
+---
 
-### 3. How the Prediction Logbook, Calibration & News Context Work
+### 3. Prediction Logbook, `^GSPC` Alpha &amp; Opt-In Foundation Pilots
 
-When you explicitly request an AI research outlook under **Price & news**, Tenerus supplies the full-window quantitative summary (multi-horizon returns, volatility, max drawdown, 50/200-bar SMA distance, volume ratio, downsampled full-range checkpoints), the calibrated Outlook ensemble snapshot, local news sentiment & earnings-window signals, and requires structured `BUY`, `SELL`, or `DO NOT BUY` actions plus a numeric `0–100%` subjective confidence:
+Tenerus deliberately keeps **numeric statistical calibration** separate from **LLM narrative research**:
 
-1. **Immutable logging:** Each horizon decision is appended atomically to local `predictions.json` with its original text, provider/model, reference price, and fixed checkpoints (**28, 180, and 365 days**).
-2. **Split-adjusted verification:** Once a checkpoint passes, Tenerus fetches the first completed daily close on or within 7 days after the checkpoint and aligns splits on the same basis (excluding dividends, fees, stale reference quotes, wrong currencies, and sample data).
-3. **Transparent scoring, benchmark alpha & calibration:** `BUY` is marked right above `+2%`, `SELL` below `−2%`, and `DO NOT BUY` at or below `+2%`. Results are displayed side-by-side against **Always BUY / Always SELL / Always WAIT** along with **excess return vs. S&P 500 (`^GSPC` alpha)**, **Brier Score**, **Expected Calibration Error (ECE)**, stated-vs-actual confidence buckets, and mean realized returns per decision.
-4. **Calibration-aware prompt context (not LLM retraining):** If learning memory is enabled (default 180 days), Tenerus feeds the model's empirical calibration summary plus up to 24 reviewed outcomes (prioritizing same-ticker calls first) into your next request so the model can calibrate overconfidence. **No LLM weights are fine-tuned.**
+| Workflow | Inputs Provided | Accountability &amp; Feedback Mechanism | Important Boundary |
+| :--- | :--- | :--- | :--- |
+| **AI Research &amp; Prediction Logbook** (*Price &amp; news*) | Full-window quant stats (5/20/60/120d returns, 50/200-bar SMA distance, max drawdown, volume ratio), calibrated Outlook snapshot, local news &amp; earnings signals | Immutable `predictions.json` entries verified at **28 / 180 / 365 days** (split-adjusted) vs. **Always BUY / SELL / WAIT**, **excess return vs. `^GSPC`**, **Brier Score**, and **ECE**; up to 24 recent outcomes (same-ticker prioritized) fed back as prompt context | Prompt-level calibration context only — **no LLM weights are ever retrained** |
+| **Local Foundation Pilots** (*Forecast Model Guide*) | Up to 12 strictly non-overlapping past 512-bar windows + current window piped over `stdin` to a user-installed Python runtime | Supports **TimesFM 2.5/3.0** (`timesfm`) and **Amazon Chronos-2** (`chronos-forecasting`), applies causal **split-conformal calibration**, prints a side-by-side scoreboard vs. **Outlook** &amp; **Baseline**, and overlays calibrated bounds on the Outlook chart | Strictly opt-in; Tenerus never bundles or auto-downloads model weights |
 
 ---
 
@@ -169,30 +184,31 @@ When you explicitly request an AI research outlook under **Price & news**, Tener
 
 Tenerus is built strictly as a **learning and research instrument**. Please keep these boundaries in mind:
 
-- **Not financial advice:** Neither the developer, historical scenario percentiles, nor any connected AI model provides personalized financial, legal, or tax advice.
+- **Not financial advice:** Neither the developer, statistical scenario bands, foundation models, nor any connected AI model provides financial, legal, or tax advice.
 - **No trade execution:** Tenerus does not connect to brokerages, manage portfolios, or execute orders.
-- **Past analogues do not predict the future:** Market regimes shift, earnings surprise, and tail events break historical ranges. Percentile bands describe past frequencies only.
-- **Simple direction scores ≠ profitability:** The logbook's ±2% price-direction rule ignores dividends, slippage, taxes, position sizing, and correlated overlapping windows.
-- **AI models make mistakes:** Connected LLMs can hallucinate, misread context, or display overconfident percentages. Treat AI outputs as hypotheses to verify against primary filings and disclosures.
-- **Data & AI provider terms apply:** Yahoo Finance quote/chart/RSS requests use **unofficial, unaffiliated public web endpoints** intended strictly for personal educational study and may be delayed, incomplete, rate-limited, or unavailable at any time. Optional data feeds (Twelve Data, Alpha Vantage), AI APIs, and local CLI assistants remain governed by each provider's respective terms of service.
+- **Past distributions do not guarantee future returns:** Regime shifts, earnings surprises, and tail shocks break historical ranges. Percentile bands describe past frequencies only.
+- **Simple direction scores ≠ trading profitability:** The logbook's ±2% price-direction rule ignores dividends, slippage, taxes, position sizing, and overlapping horizons.
+- **AI models make mistakes:** Connected LLMs can hallucinate or display overconfident percentages. Verify claims against primary filings and disclosures.
+- **External feed &amp; provider terms apply:** Yahoo Finance quote/chart/RSS requests use **unofficial, unaffiliated public web endpoints** intended strictly for personal educational study and may be delayed, incomplete, rate-limited, or unavailable at any time. Optional feeds (Twelve Data, Alpha Vantage), AI APIs, local CLI assistants, and foundation model weights remain governed by each provider's license and terms.
 
 ---
 
-## Download & Install
+## Download &amp; Install
 
 Prebuilt packages for every platform are published on [**GitHub Releases**](https://github.com/bnelabs/tenerus/releases) alongside a unified `SHA256SUMS.txt` checksum file.
 
 | Platform | Architecture | Package Format | Install / Run |
-| --- | --- | --- | --- |
+| :--- | :--- | :--- | :--- |
 | **macOS** (13+) | Apple Silicon (`arm64`) | `Tenerus-<ver>-macos-arm64.zip` | Unzip `Tenerus.app` into `/Applications` (or a regular local folder) and open it. |
-| **Windows** (10/11) | `x86_64` & `ARM64` | `Tenerus-<ver>-windows-x86_64.zip`<br/>`Tenerus-<ver>-windows-arm64.zip` | Unzip and run `tenerus.exe`. Uses built-in Windows `curl.exe`—no extra runtime needed. |
-| **Ubuntu / Debian** | `amd64` & `arm64` | `tenerus_<ver>_amd64.deb`<br/>`tenerus_<ver>_arm64.deb` | `sudo apt install ./tenerus_<ver>_<arch>.deb` |
-| **Fedora / RHEL** | `x86_64` & `aarch64` | `tenerus-<ver>-1.*.x86_64.rpm`<br/>`tenerus-<ver>-1.*.aarch64.rpm` | `sudo dnf install ./tenerus-<ver>-1.*.<arch>.rpm` |
-| **Arch Linux** | `x86_64` & `aarch64` | `tenerus-<ver>-1-x86_64.pkg.tar.zst`<br/>`tenerus-<ver>-1-aarch64.pkg.tar.zst` | `sudo pacman -U ./tenerus-<ver>-1-<arch>.pkg.tar.zst` *(or build with [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD))* |
-| **Linux (Portable)** | `x86_64` & `arm64` | `tenerus-<ver>-linux-x86_64.tar.gz`<br/>`tenerus-<ver>-linux-arm64.tar.gz` | Extract and run `./bin/tenerus` (requires `curl` and OpenGL/X11 or Wayland). |
+| **Windows** (10/11) | `x86_64` &amp; `ARM64` | `Tenerus-<ver>-windows-x86_64.zip`<br/>`Tenerus-<ver>-windows-arm64.zip` | Unzip and run `tenerus.exe`. Uses built-in Windows `curl.exe`—no extra runtime needed. |
+| **Ubuntu / Debian** | `amd64` &amp; `arm64` | `tenerus_<ver>_amd64.deb`<br/>`tenerus_<ver>_arm64.deb` | `sudo apt install ./tenerus_<ver>_<arch>.deb` |
+| **Fedora / RHEL** | `x86_64` &amp; `aarch64` | `tenerus-<ver>-1.*.x86_64.rpm`<br/>`tenerus-<ver>-1.*.aarch64.rpm` | `sudo dnf install ./tenerus-<ver>-1.*.<arch>.rpm` |
+| **Arch Linux** | `x86_64` &amp; `aarch64` | `tenerus-<ver>-1-x86_64.pkg.tar.zst`<br/>`tenerus-<ver>-1-aarch64.pkg.tar.zst` | `sudo pacman -U ./tenerus-<ver>-1-<arch>.pkg.tar.zst` *(or build with [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD))* |
+| **Linux (Portable)** | `x86_64` &amp; `arm64` | `tenerus-<ver>-linux-x86_64.tar.gz`<br/>`tenerus-<ver>-linux-arm64.tar.gz` | Extract and run `./bin/tenerus` (requires `curl` and OpenGL/X11 or Wayland). |
 | **FreeBSD** (14+) | `amd64` | `tenerus-<ver>-freebsd-amd64.pkg`<br/>`tenerus-<ver>-freebsd-amd64.tar.xz` | `sudo pkg add ./tenerus-<ver>-freebsd-amd64.pkg` *(or extract `.tar.xz` and run `./bin/tenerus`)* |
 
 Verify any download against `SHA256SUMS.txt`:
+
 ```sh
 # Linux / macOS
 shasum -a 256 --ignore-missing -c SHA256SUMS.txt
@@ -207,12 +223,12 @@ sha256 -c SHA256SUMS.txt
 > - **Local data directories:**
 >   - **macOS:** `~/Library/Application Support/Tenerus`
 >   - **Windows:** `%APPDATA%\Tenerus`
->   - **Linux & FreeBSD:** `$XDG_DATA_HOME/tenerus` (defaults to `~/.local/share/tenerus`)
-> - **Exports & Secret Storage:** Excel (`.xlsx`), PDF (`.pdf`), and Word (`.docx`) exports work on all platforms (native Save dialog on macOS; saved to `<data_dir>/exports/` on Windows, Linux, and FreeBSD). API secrets can optionally be saved in **macOS Keychain** on macOS and remain session-only in memory on Windows, Linux, and FreeBSD.
+>   - **Linux &amp; FreeBSD:** `$XDG_DATA_HOME/tenerus` (defaults to `~/.local/share/tenerus`)
+> - **Exports &amp; Secret Storage:** Excel (`.xlsx`), PDF (`.pdf`), and Word (`.docx`) exports work on all platforms (native Save dialog on macOS; saved to `<data_dir>/exports/` on Windows, Linux, and FreeBSD). API secrets can optionally be saved in **macOS Keychain** on macOS and remain session-only in memory on Windows, Linux, and FreeBSD.
 
 ---
 
-## Build & Run from Source
+## Build &amp; Run from Source
 
 ### Prerequisites
 - **Rust 1.85+** (Rust 2024 edition) via [rustup](https://rustup.rs/)
@@ -224,56 +240,60 @@ sha256 -c SHA256SUMS.txt
   - **Arch Linux:** `sudo pacman -S base-devel libgl libx11 libxkbcommon wayland curl`
   - **FreeBSD:** `sudo pkg install rust curl pkgconf mesa-libs libX11 libxkbcommon wayland`
 
-### Build, Test & Package
+### Build, Test &amp; Package
 
 ```sh
 git clone https://github.com/bnelabs/tenerus.git
 cd tenerus
 
-# Run the full test suite (137 unit & headless UI tests)
+# Run the full offline test suite (137 unit & headless UI tests)
 cargo test
 
 # Launch in offline demonstration mode (labeled sample data)
 cargo run -- --demo
 
-# Build release binary
+# Build optimized release binary
 cargo build --release
 ```
 
-Platform packaging scripts included in `scripts/`:
-- macOS: `sh scripts/package.sh`
-- Windows: `pwsh ./scripts/package-windows.ps1 -BinaryPath target/release/tenerus.exe -Arch x86_64`
-- Ubuntu `.deb`: `sh scripts/package-linux-deb.sh target/release/tenerus amd64`
-- Fedora `.rpm`: `rpmbuild -bb --define "_version 0.8.0" --define "_bin $(pwd)/target/release/tenerus" --define "_root $(pwd)" packaging/linux/tenerus.spec`
-- Arch Linux: `cd packaging/arch && makepkg -si`
-- FreeBSD `.pkg` & `.tar.xz`: `sh scripts/package-freebsd.sh target/release/tenerus amd64`
+Platform packaging scripts in `scripts/`:
+- **macOS:** `sh scripts/package.sh`
+- **Windows:** `pwsh ./scripts/package-windows.ps1 -BinaryPath target/release/tenerus.exe -Arch x86_64`
+- **Ubuntu `.deb`:** `sh scripts/package-linux-deb.sh target/release/tenerus amd64`
+- **Fedora `.rpm`:** `rpmbuild -bb --define "_version 0.8.0" --define "_bin $(pwd)/target/release/tenerus" --define "_root $(pwd)" packaging/linux/tenerus.spec`
+- **Arch Linux:** `cd packaging/arch && makepkg -si`
+- **FreeBSD `.pkg` &amp; `.tar.xz`:** `sh scripts/package-freebsd.sh target/release/tenerus amd64`
 
-### Useful CLI Options
+<details>
+  <summary><strong>CLI Flags &amp; Environment Variables</strong></summary>
+  <br />
 
 | Flag / Env Var | Description |
-| --- | --- |
+| :--- | :--- |
 | `--demo` | Launch in offline demonstration mode with labeled simulated prices. |
 | `--symbol AAPL` | Open directly on a specific ticker without adding it to watchlists. |
 | `--watchlist 1` | Open a specific local watchlist scrolled to the top. |
 | `--business-news` | Open market-wide headlines. |
 | `--screenshot <file.png> --view <name>` | Render 120 frames off-focus (`prices`, `expert`, `market-god`, `connections`, `news`, `saved`, `logbook`, `models`, `welcome`, `about`, `help`, `disclaimer`, `import-data`), save PNG, and exit. |
-| `--check-local-model` | Read-only hardware & Python/MLX/TimesFM readiness check (installs/downloads nothing). |
+| `--check-local-model` | Read-only hardware &amp; Python/MLX/TimesFM/Chronos readiness check (installs/downloads nothing). |
 | `--test-briefing <codex\|claude\|agy>` | Validate a local CLI assistant using sample scenario evidence. |
 | `TENERUS_DATA_DIR=/path` | Override the default OS data directory. |
 
+</details>
+
 ---
 
-## Security & Privacy Highlights
+## Security &amp; Privacy
 
-- **Local storage only:** Settings, watchlists, imported closes, cached feeds, and `predictions.json` stay on your device using atomic writes (`0600` files inside `0700` directories on Unix).
+- **Local storage only:** Settings, watchlists, imported closes, daily sentiment history (`sentiment-history.json`), cached feeds, and `predictions.json` stay on your device using atomic writes (`0600` files inside `0700` directories on Unix).
 - **No plaintext secrets on disk:** API keys remain in memory unless you opt into **macOS Keychain** (`Tenerus inference`) on macOS. Secrets are never written to settings files or exported reports.
-- **Safe HTTP transport:** Remote endpoints require HTTPS with explicit curl `proto` locking (HTTP is restricted to `localhost`/loopback, which automatically bypasses system HTTP proxies via `noproxy = "*"`). Headers and credentials are piped to the OS-trusted `curl` binary over `stdin` so keys never appear in process listings or get hijacked from the working directory.
-- **Hardened release supply chain:** All GitHub Actions are pinned to immutable commit SHAs on Node.js 24 with deny-by-default token permissions (`permissions: {}`) and `persist-credentials: false`. See [SECURITY.md](SECURITY.md) for the full threat model and vulnerability reporting process.
+- **Safe HTTP transport:** Remote endpoints require HTTPS with explicit curl `proto` locking (HTTP is restricted to `localhost`/loopback, which automatically bypasses system proxies via `noproxy = "*"`). Headers and credentials are piped to the OS-trusted `curl` binary over `stdin` so keys never appear in process listings or get hijacked from the working directory.
+- **Hardened release supply chain:** All GitHub Actions are pinned to immutable 40-char commit SHAs on Node.js 24 with deny-by-default token permissions (`permissions: {}`), `persist-credentials: false`, and compile-time `--remap-path-prefix` stripping. See [SECURITY.md](SECURITY.md) for the full threat model and vulnerability reporting process.
 
 ---
 
-## Changelog, Credits & License
+## Changelog, Credits &amp; License
 
 - **Release history:** See [CHANGELOG.md](CHANGELOG.md) and [GitHub Releases](https://github.com/bnelabs/tenerus/releases).
-- **Third-party licenses & data boundaries:** See [CREDITS.md](CREDITS.md).
+- **Third-party licenses &amp; data boundaries:** See [CREDITS.md](CREDITS.md).
 - **License:** Released under the [MIT License](LICENSE).
