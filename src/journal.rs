@@ -145,6 +145,27 @@ pub struct Journal {
     pub entries: Vec<Prediction>,
 }
 
+#[derive(Clone, Serialize, Debug, Default, PartialEq)]
+pub struct CalibrationBucket {
+    pub label: String,
+    pub count: usize,
+    pub avg_confidence_percent: f64,
+    pub actual_accuracy_percent: f64,
+}
+
+#[derive(Clone, Serialize, Debug, Default, PartialEq)]
+pub struct CalibrationSummary {
+    pub reviewed: usize,
+    pub scored_with_confidence: usize,
+    pub brier_score: Option<f64>,
+    pub expected_calibration_error: Option<f64>,
+    pub mean_stated_confidence: Option<f64>,
+    pub mean_buy_return: Option<f64>,
+    pub mean_sell_return: Option<f64>,
+    pub mean_wait_return: Option<f64>,
+    pub buckets: Vec<CalibrationBucket>,
+}
+
 #[derive(Clone, Serialize, Debug)]
 pub struct LearningExample {
     pub ticker: String,
@@ -163,6 +184,8 @@ pub struct LearningContext {
     pub window_days: u16,
     pub reviewed: usize,
     pub correct: usize,
+    pub same_ticker_examples: usize,
+    pub calibration: CalibrationSummary,
     pub examples: Vec<LearningExample>,
 }
 
@@ -343,7 +366,128 @@ impl Journal {
         }
         scores
     }
+    /// Measure confidence calibration (Brier score, Expected Calibration Error, buckets)
+    /// and mean realized return per decision on the exact deduplicated benchmark cohort.
+    pub fn calibration(
+        &self,
+        provider: &Provider,
+        symbol: Option<&str>,
+        at: i64,
+    ) -> CalibrationSummary {
+        let mut eligible = self
+            .entries
+            .iter()
+            .filter(|e| {
+                e.provider == provider.name
+                    && e.model == provider.model
+                    && e.endpoint == provider.endpoint
+                    && symbol.is_none_or(|s| s == e.symbol)
+                    && e.verified_outcome(at).is_some()
+            })
+            .collect::<Vec<_>>();
+        eligible.sort_by_key(|e| (e.generated, e.id));
+        let mut seen = std::collections::HashSet::new();
+        let mut deduped = Vec::new();
+        for e in eligible {
+            if seen.insert((&e.symbol, e.horizon, e.generated.div_euclid(DAY))) {
+                deduped.push(e);
+            }
+        }
+        Self::summarize_calibration(&deduped)
+    }
+
+    fn summarize_calibration(entries: &[&Prediction]) -> CalibrationSummary {
+        let mut summary = CalibrationSummary {
+            reviewed: entries.len(),
+            ..Default::default()
+        };
+        if entries.is_empty() {
+            return summary;
+        }
+        let mut brier_sum = 0.0;
+        let mut conf_sum = 0.0;
+        let mut conf_count = 0usize;
+        let mut buy_rets = Vec::new();
+        let mut sell_rets = Vec::new();
+        let mut wait_rets = Vec::new();
+        // 4 calibration buckets: <50%, 50–69%, 70–84%, 85–100%
+        let bucket_defs: [(&str, f64, f64); 4] = [
+            ("0–49%", 0.0, 50.0),
+            ("50–69%", 50.0, 70.0),
+            ("70–84%", 70.0, 85.0),
+            ("85–100%", 85.0, 100.1),
+        ];
+        let mut b_counts = [0usize; 4];
+        let mut b_conf = [0.0f64; 4];
+        let mut b_hits = [0usize; 4];
+
+        for e in entries {
+            let Some(o) = e.outcome.as_ref() else {
+                continue;
+            };
+            match e.decision {
+                Decision::Buy => buy_rets.push(o.change_percent),
+                Decision::Sell => sell_rets.push(o.change_percent),
+                Decision::DoNotBuy => wait_rets.push(o.change_percent),
+            }
+            if let Some(conf) = e
+                .confidence_percent
+                .filter(|v| v.is_finite() && (0.0..=100.0).contains(v))
+            {
+                let p = conf / 100.0;
+                let y = if o.correct { 1.0 } else { 0.0 };
+                brier_sum += (p - y).powi(2);
+                conf_sum += conf;
+                conf_count += 1;
+                if let Some(idx) = bucket_defs
+                    .iter()
+                    .position(|&(_, lo, hi)| conf >= lo && conf < hi)
+                {
+                    b_counts[idx] += 1;
+                    b_conf[idx] += conf;
+                    b_hits[idx] += usize::from(o.correct);
+                }
+            }
+        }
+        let avg = |v: &[f64]| (!v.is_empty()).then(|| v.iter().sum::<f64>() / v.len() as f64);
+        summary.mean_buy_return = avg(&buy_rets);
+        summary.mean_sell_return = avg(&sell_rets);
+        summary.mean_wait_return = avg(&wait_rets);
+        summary.scored_with_confidence = conf_count;
+        if conf_count > 0 {
+            summary.brier_score = Some(brier_sum / conf_count as f64);
+            summary.mean_stated_confidence = Some(conf_sum / conf_count as f64);
+            let mut ece = 0.0;
+            for (idx, &(label, _, _)) in bucket_defs.iter().enumerate() {
+                if b_counts[idx] > 0 {
+                    let c = b_counts[idx] as f64;
+                    let avg_c = b_conf[idx] / c;
+                    let acc = 100.0 * b_hits[idx] as f64 / c;
+                    ece += (c / conf_count as f64) * ((avg_c - acc).abs() / 100.0);
+                    summary.buckets.push(CalibrationBucket {
+                        label: label.into(),
+                        count: b_counts[idx],
+                        avg_confidence_percent: (avg_c * 10.0).round() / 10.0,
+                        actual_accuracy_percent: (acc * 10.0).round() / 10.0,
+                    });
+                }
+            }
+            summary.expected_calibration_error = Some(ece);
+        }
+        summary
+    }
+
     pub fn learning_context(&self, provider: &Provider, days: u16, at: i64) -> LearningContext {
+        self.learning_context_for(provider, None, days, at)
+    }
+
+    pub fn learning_context_for(
+        &self,
+        provider: &Provider,
+        ticker: Option<&str>,
+        days: u16,
+        at: i64,
+    ) -> LearningContext {
         let mut eligible = self
             .entries
             .iter()
@@ -357,6 +501,44 @@ impl Journal {
             })
             .collect::<Vec<_>>();
         eligible.sort_by_key(|e| std::cmp::Reverse(e.outcome.as_ref().unwrap().price_time));
+        let calibration = Self::summarize_calibration(&eligible);
+        let to_example = |e: &Prediction| {
+            let outcome = e.outcome.as_ref().unwrap();
+            LearningExample {
+                ticker: e.symbol.clone(),
+                horizon: HORIZONS[e.horizon].into(),
+                decision: e.decision,
+                confidence_percent: e.confidence_percent,
+                original_reason: e.reason.chars().take(600).collect(),
+                original_risks: e
+                    .risks
+                    .iter()
+                    .take(2)
+                    .map(|s| s.chars().take(200).collect())
+                    .collect(),
+                decided_at: e.generated,
+                reviewed_price_at: outcome.price_time,
+                realized_change_percent: outcome.change_percent,
+                correct: outcome.correct,
+            }
+        };
+        let mut examples = Vec::with_capacity(24);
+        let mut same_ticker_examples = 0usize;
+        if let Some(sym) = ticker {
+            for e in eligible.iter().filter(|e| e.symbol == sym).take(12) {
+                examples.push(to_example(e));
+                same_ticker_examples += 1;
+            }
+            for e in eligible
+                .iter()
+                .filter(|e| e.symbol != sym)
+                .take(24 - examples.len())
+            {
+                examples.push(to_example(e));
+            }
+        } else {
+            examples.extend(eligible.iter().take(24).map(|e| to_example(e)));
+        }
         LearningContext {
             window_days: days,
             reviewed: eligible.len(),
@@ -364,30 +546,9 @@ impl Journal {
                 .iter()
                 .filter(|e| e.outcome.as_ref().unwrap().correct)
                 .count(),
-            examples: eligible
-                .into_iter()
-                .take(24)
-                .map(|e| {
-                    let outcome = e.outcome.as_ref().unwrap();
-                    LearningExample {
-                        ticker: e.symbol.clone(),
-                        horizon: HORIZONS[e.horizon].into(),
-                        decision: e.decision,
-                        confidence_percent: e.confidence_percent,
-                        original_reason: e.reason.chars().take(600).collect(),
-                        original_risks: e
-                            .risks
-                            .iter()
-                            .take(2)
-                            .map(|s| s.chars().take(200).collect())
-                            .collect(),
-                        decided_at: e.generated,
-                        reviewed_price_at: outcome.price_time,
-                        realized_change_percent: outcome.change_percent,
-                        correct: outcome.correct,
-                    }
-                })
-                .collect(),
+            same_ticker_examples,
+            calibration,
+            examples,
         }
     }
 }
@@ -832,6 +993,50 @@ pub(crate) mod tests {
                 .iter()
                 .all(|e| e.original_reason.chars().count() <= 600)
         );
+    }
+    #[test]
+    fn calibration_computes_brier_ece_returns_and_prioritizes_same_ticker_memory() {
+        let mut journal = Journal::default();
+        let mut nvda = analysis();
+        nvda.symbol = "NVDA".into();
+        nvda.horizons[0].decision = Some(Decision::Buy);
+        nvda.horizons[0].confidence_percent = Some(90.);
+        journal.record(&nvda);
+        let due_nvda = journal.entries[0].review_at;
+        // Realized +10% -> Buy is correct (y = 1.0, p = 0.90 -> brier = 0.01)
+        journal.resolve(&[1], &prices(due_nvda, 110.), due_nvda + DAY);
+
+        let mut aapl = analysis();
+        aapl.symbol = "AAPL".into();
+        aapl.generated += 2 * DAY;
+        aapl.context_time += 2 * DAY;
+        aapl.horizons[0].decision = Some(Decision::Buy);
+        aapl.horizons[0].confidence_percent = Some(90.);
+        journal.record(&aapl);
+        let aapl_id = journal.entries[3].id;
+        let due_aapl = journal.entries[3].review_at;
+        let mut aapl_data = prices(due_aapl, 90.);
+        aapl_data.market.quote.symbol = "AAPL".into();
+        // Realized -10% -> Buy is incorrect (y = 0.0, p = 0.90 -> brier = 0.81)
+        journal.resolve(&[aapl_id], &aapl_data, due_aapl + DAY);
+
+        let at = due_aapl + 3 * DAY;
+        let cal = journal.calibration(&Provider::meta(), None, at);
+        assert_eq!(cal.reviewed, 2);
+        assert_eq!(cal.scored_with_confidence, 2);
+        // Mean Brier = (0.01 + 0.81) / 2 = 0.41
+        assert!((cal.brier_score.unwrap() - 0.41).abs() < 1e-6);
+        // Bucket 85-100%: 90% stated vs 50% actual -> ECE = 0.40
+        assert!((cal.expected_calibration_error.unwrap() - 0.40).abs() < 1e-6);
+        assert!((cal.mean_buy_return.unwrap() - 0.0).abs() < 1e-6);
+        assert_eq!(cal.buckets.len(), 1);
+        assert_eq!(cal.buckets[0].label, "85–100%");
+
+        // Same-ticker memory prioritizes NVDA before newer AAPL entry.
+        let mem = journal.learning_context_for(&Provider::meta(), Some("NVDA"), 180, at);
+        assert_eq!(mem.same_ticker_examples, 1);
+        assert_eq!(mem.examples[0].ticker, "NVDA");
+        assert!(mem.calibration.brier_score.is_some());
     }
     #[test]
     fn damaged_journal_is_reported_without_touching_the_saved_file() {

@@ -112,7 +112,7 @@ impl Desk {
         self.playback = None;
     }
 
-    fn history(&mut self, ticker: &str, demo: bool) -> Option<Arc<History>> {
+    pub(super) fn history(&mut self, ticker: &str, demo: bool) -> Option<Arc<History>> {
         if let Some(imported) = self.imports.get(ticker) {
             return Some(imported.history.clone());
         }
@@ -406,13 +406,22 @@ impl MarketApp {
             });
         let mut export =
             report_export::Report::outlook(history, scenario, source, basis, trials, revealed);
-        let input = Input::from_scenario(
+        let news_sig = playback.is_none().then(|| {
+            self.outlook_news_signal(&history.ticker, scenario.fan.len().saturating_sub(1))
+        });
+        if let Some(sig) = &news_sig {
+            export.add_news_signal(sig);
+        }
+        let mut input = Input::from_scenario(
             &history.ticker,
             &history.currency,
             history.sample,
             scenario,
             trials,
         );
+        if let Some(sig) = &news_sig {
+            input = input.with_news_signal(sig);
+        }
         let engine = self.prefs.briefing_engine;
         let key = briefing_key(history, scenario, &input, engine);
         if let Some((_, result)) = self
@@ -774,6 +783,15 @@ impl MarketApp {
         );
     }
 
+    fn outlook_news_signal(&self, ticker: &str, horizon: usize) -> crate::news_signal::NewsSignal {
+        let articles = self.news.get(ticker).map(Vec::as_slice).unwrap_or(&[]);
+        let earnings = self
+            .quote(ticker)
+            .filter(|q| !q.demo)
+            .and_then(|q| q.details.earnings_start);
+        crate::news_signal::analyze_headlines(articles, earnings, now(), horizon)
+    }
+
     fn outlook_rail(
         &mut self,
         ui: &mut egui::Ui,
@@ -784,9 +802,17 @@ impl MarketApp {
         let report = report.and_then(|r| r.as_ref().ok());
         let playback = self.desk.playback.as_ref().map(|r| r.scenario.clone());
         let scenario = playback.as_deref().or_else(|| report.map(|r| &r.current));
+        let news_sig = history
+            .zip(scenario)
+            .filter(|_| playback.is_none())
+            .map(|(h, s)| self.outlook_news_signal(&h.ticker, s.fan.len().saturating_sub(1)));
         let evidence = history.zip(report.zip(scenario)).map(|(h, (r, s))| {
             let trials = playback.is_none().then_some(r.trials.as_slice());
-            Input::from_scenario(&h.ticker, &h.currency, h.sample, s, trials)
+            let input = Input::from_scenario(&h.ticker, &h.currency, h.sample, s, trials);
+            match &news_sig {
+                Some(sig) => input.with_news_signal(sig),
+                None => input,
+            }
         });
         let active = self.prefs.briefing_engine;
         let mut engine = active;
@@ -909,12 +935,62 @@ impl MarketApp {
             text(
                 ui,
                 format!(
-                    "A close beyond either boundary after {} sessions would fall outside the middle historical range.",
+                    "A close beyond either boundary after {} sessions would fall outside the calibrated range.",
                     scenario.fan.len() - 1
                 ),
                 11.5,
                 p.muted,
             );
+            if let Some(sig) = news_sig.as_ref().filter(|s| s.has_signal()) {
+                ui.add_space(10.);
+                ui.separator();
+                ui.add_space(6.);
+                ui.label(display_text("News & events", 17., p.text));
+                let tone_color = if sig.sentiment_score >= 0.18 {
+                    p.green
+                } else if sig.sentiment_score <= -0.18 {
+                    p.red
+                } else {
+                    p.blue
+                };
+                if sig.article_count > 0 {
+                    ui.horizontal_wrapped(|ui| {
+                        pill(
+                            ui,
+                            &format!("{} ({:+.2})", sig.sentiment_label, sig.sentiment_score),
+                            tone_color,
+                        );
+                        text(
+                            ui,
+                            format!(
+                                "{} headlines (+{}/−{})",
+                                sig.article_count, sig.positive_count, sig.negative_count
+                            ),
+                            11.,
+                            p.muted,
+                        );
+                    });
+                }
+                if !sig.event_tags.is_empty() {
+                    text(
+                        ui,
+                        format!("Topics · {}", sig.event_tags.join(" · ")),
+                        11.,
+                        p.muted,
+                    );
+                }
+                if sig.earnings_in_horizon {
+                    let msg = sig.days_to_earnings.map_or_else(
+                        || "Expected earnings inside forecast window · elevated gap risk.".into(),
+                        |d| {
+                            format!(
+                                "Expected earnings in ~{d}d (inside window) · elevated gap risk."
+                            )
+                        },
+                    );
+                    text(ui, msg, 11.5, p.red);
+                }
+            }
             ui.add_space(12.);
             ui.separator();
             ui.add_space(7.);
@@ -1080,6 +1156,7 @@ fn outcome_columns(
 fn show_evaluation(ui: &mut egui::Ui, p: Palette, report: Option<&Report>, scenario: &Scenario) {
     ui.add_space(8.);
     ui.separator();
+    let cal = scenario.calibration;
     if let Some(report) = report {
         ui.label(
             RichText::new("Historical track record")
@@ -1098,35 +1175,74 @@ fn show_evaluation(ui: &mut egui::Ui, p: Palette, report: Option<&Report>, scena
             let n = report.trials.len();
             let covered = report.trials.iter().filter(|r| r.inside).count();
             let baseline = report.trials.iter().filter(|r| r.baseline_inside).count();
+            let ens_pb =
+                report.trials.iter().map(|r| r.pinball_loss).sum::<f64>() * 100. / n as f64;
+            let base_pb = report
+                .trials
+                .iter()
+                .map(|r| r.baseline_pinball_loss)
+                .sum::<f64>()
+                * 100.
+                / n as f64;
             let error =
                 report.trials.iter().map(|r| r.absolute_error).sum::<f64>() * 100. / n as f64;
             let baseline_error =
                 report.trials.iter().map(|r| r.baseline_error).sum::<f64>() * 100. / n as f64;
-            ui.label(RichText::new(format!("Range coverage  {covered}/{n} with matches  ·  {baseline}/{n} unfiltered")).color(p.text).size(13.))
-            .on_hover_text("How often the final close landed inside each middle-80% band on the same past dates.");
+            ui.label(
+                RichText::new(format!(
+                    "Range coverage  {covered}/{n} calibrated ensemble  ·  {baseline}/{n} unfiltered"
+                ))
+                .color(p.text)
+                .size(13.),
+            )
+            .on_hover_text(
+                "How often the realized close landed inside each 80% interval on strictly causal walk-forward tests.",
+            );
             text(
                 ui,
                 format!(
-                    "Average median error  {error:.1} vs {baseline_error:.1} percentage points"
+                    "Pinball loss  {ens_pb:.2} vs {base_pb:.2} pp ({:+.1}% skill)  ·  Median MAE {error:.1} vs {baseline_error:.1} pp",
+                    cal.pinball_skill() * 100.
                 ),
                 12.,
                 p.muted,
             );
             text(
                 ui,
-                "Baseline uses all eligible historical periods. Each test used only outcomes known before its start.",
+                format!(
+                    "Self-calibrating weights · Analogs {:.0}% ({:.1} eff.) · Online QR {:.0}% · EWMA {:.0}% · Baseline {:.0}% · Conformal {:+.1} pp",
+                    cal.weights.analogs * 100.,
+                    cal.effective_matches,
+                    cal.weights.online_qr * 100.,
+                    cal.weights.ewma * 100.,
+                    cal.weights.baseline * 100.,
+                    cal.conformal_delta * 100.,
+                ),
                 11.5,
+                p.muted,
+            );
+            text(
+                ui,
+                "Walk-forward self-calibration updates Hedge model weights and split-conformal intervals strictly from prior completed outcomes.",
+                11.,
                 p.muted,
             );
         }
     }
     let setup = scenario.setup;
+    let vol_text = setup
+        .volume_ratio
+        .map(|v| format!(" · vol 5d/20d {v:.2}x"))
+        .unwrap_or_default();
     text(
         ui,
         format!(
-            "Setup · 20-session move {} · daily swings {:.2}% · from 60-session high {}",
+            "Setup · 5d/20d/60d {}, {}, {} · daily vol {:.2}% ({:.2}x) · 60d drawdown {}{vol_text}",
+            pct(setup.momentum_5),
             pct(setup.momentum),
+            pct(setup.momentum_60),
             setup.daily_volatility * 100.,
+            setup.vol_ratio,
             pct(setup.drawdown)
         ),
         11.5,

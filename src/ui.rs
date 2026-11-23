@@ -154,6 +154,7 @@ enum Event {
     Review(String, Vec<u64>, Result<ReviewData, String>),
     ReviewsDone,
     LocalModelCheck(crate::forecast::MacCheck),
+    LocalForecast(Result<crate::forecast::LocalForecast, String>),
     ScenarioHistory(String, Result<crate::scenarios::History, String>),
     Briefing(outlook::BriefKey, Result<crate::briefing::Briefing, String>),
     HistoryImport(u64, Result<market_data::ImportedHistory, String>),
@@ -233,6 +234,8 @@ pub struct MarketApp {
     model_guide_open: bool,
     local_model_check: Option<crate::forecast::MacCheck>,
     local_model_check_busy: bool,
+    local_forecast: Option<Result<crate::forecast::LocalForecast, String>>,
+    local_forecast_busy: bool,
     desk: outlook::Desk,
     journal_selected_only: bool,
     journal_limit: usize,
@@ -446,6 +449,8 @@ impl MarketApp {
             model_guide_open: launch.view == "models",
             local_model_check: None,
             local_model_check_busy: false,
+            local_forecast: None,
+            local_forecast_busy: false,
             desk: outlook::Desk::new(
                 launch.view != "prices",
                 (!transient).then(|| data.join("scenario-history.json")),
@@ -709,7 +714,7 @@ impl MarketApp {
         self.refresh(ctx);
     }
     fn dispatch_intent(&mut self, intent: NavigationIntent, ctx: &egui::Context) {
-        // 0x100008880: navigation is separate from watchlist membership edits.
+        // Navigation intents do not alter saved watchlist membership.
         match intent {
             NavigationIntent::Symbol(ticker) if valid_ticker(&ticker) => {
                 self.choose(&ticker, ctx);
@@ -1075,6 +1080,10 @@ impl MarketApp {
                     self.local_model_check = Some(report);
                     self.local_model_check_busy = false;
                 }
+                Event::LocalForecast(result) => {
+                    self.local_forecast = Some(result);
+                    self.local_forecast_busy = false;
+                }
                 Event::ScenarioHistory(ticker, result) => {
                     self.desk.finish_history(ticker, result, self.prefs.offline);
                 }
@@ -1146,24 +1155,34 @@ impl MarketApp {
             self.analyzing.insert(t.clone());
             self.ai_errors.remove(&key);
             let news = self.news.get(&t).cloned().unwrap_or_default();
-            groups[index].push((t, m, news));
+            let outlook_snap = self
+                .desk
+                .history(&t, sample)
+                .and_then(|h| crate::scenarios::report(&h, 20).ok())
+                .map(|r| network::OutlookSnapshot::from_scenario(&r.current));
+            let mem = self.journal.learning_context_for(
+                &p,
+                Some(&t),
+                if sample { 0 } else { self.prefs.memory_days },
+                now(),
+            );
+            groups[index].push((t, m, news, mem, outlook_snap));
         }
-        let memory = self.journal.learning_context(
-            &p,
-            if self.prefs.offline {
-                0
-            } else {
-                self.prefs.memory_days
-            },
-            now(),
-        );
         for jobs in groups.into_iter().filter(|group| !group.is_empty()) {
             let tx = self.tx.clone();
             let c = ctx.clone();
-            let (p, s, memory) = (p.clone(), s.clone(), memory.clone());
+            let (p, s) = (p.clone(), s.clone());
             std::thread::spawn(move || {
-                for (ticker, market, news) in jobs {
-                    let result = network::analyze(&p, &s, &ticker, market, news, &memory);
+                for (ticker, market, news, memory, outlook_snap) in jobs {
+                    let result = network::analyze_with_outlook(
+                        &p,
+                        &s,
+                        &ticker,
+                        market,
+                        news,
+                        &memory,
+                        outlook_snap.as_ref(),
+                    );
                     if tx
                         .send(Event::Analysis(ticker, sample, i, token, result))
                         .is_err()
@@ -2684,6 +2703,52 @@ impl MarketApp {
                 });
         }
         let repeated = scores.iter().map(|s| s.repeated).sum::<usize>();
+        let cal = self.journal.calibration(
+            provider,
+            selected_only.then_some(self.prefs.selected.as_str()),
+            now(),
+        );
+        if cal.reviewed > 0 {
+            ui.add_space(6.);
+            let mut stats = Vec::new();
+            if let Some(brier) = cal.brier_score {
+                stats.push(format!("Brier {brier:.3}"));
+            }
+            if let Some(ece) = cal.expected_calibration_error {
+                stats.push(format!("Calibration error (ECE) {:.1}%", ece * 100.));
+            }
+            if let Some(r) = cal.mean_buy_return {
+                stats.push(format!("Avg BUY {r:+.1}%"));
+            }
+            if let Some(r) = cal.mean_sell_return {
+                stats.push(format!("Avg SELL {r:+.1}%"));
+            }
+            if let Some(r) = cal.mean_wait_return {
+                stats.push(format!("Avg WAIT {r:+.1}%"));
+            }
+            if !stats.is_empty() {
+                text(ui, stats.join("  ·  "), 11.5, p.text);
+            }
+            if !cal.buckets.is_empty() {
+                let buckets_line = cal
+                    .buckets
+                    .iter()
+                    .map(|b| {
+                        format!(
+                            "{}: {:.0}% stated → {:.0}% actual (n={})",
+                            b.label, b.avg_confidence_percent, b.actual_accuracy_percent, b.count
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("  |  ");
+                text(
+                    ui,
+                    format!("Confidence calibration · {buckets_line}"),
+                    11.,
+                    p.muted,
+                );
+            }
+        }
         text(
             ui,
             format!(
@@ -2726,8 +2791,39 @@ impl MarketApp {
                                 ctx.request_repaint();
                             });
                         }
+                        let selected_ticker = self.prefs.selected.clone();
+                        let pilot_history = self.desk.history(&selected_ticker, self.prefs.offline);
+                        let can_pilot = !self.local_forecast_busy && !self.transient && pilot_history.is_some();
+                        if ui.add_enabled(can_pilot, egui::Button::new(format!("Run local TimesFM pilot ({selected_ticker})"))).clicked()
+                            && let Some(history) = pilot_history
+                        {
+                            self.local_forecast_busy = true;
+                            let tx = self.tx.clone();
+                            let ctx = ctx.clone();
+                            std::thread::spawn(move || {
+                                let _ = tx.send(Event::LocalForecast(crate::forecast::run_local_forecast(&history, 28)));
+                                ctx.request_repaint();
+                            });
+                        }
                     });
                     ui.add_space(12.);
+                    if self.local_forecast_busy {
+                        ui.horizontal(|ui| { ui.spinner(); text(ui, "Running opt-in local TimesFM 28-session pilot…", 12., p.muted); });
+                        ui.add_space(6.);
+                    } else if let Some(result) = &self.local_forecast {
+                        Frame::new().fill(p.panel).stroke(Stroke::new(1., p.line)).corner_radius(9).inner_margin(10).show(ui, |ui| {
+                            match result {
+                                Ok(f) => {
+                                    text(ui, format!("Local TimesFM pilot · {} (+{} sessions · runtime {} · {} ms)", f.ticker, f.horizon, f.runtime, f.elapsed_ms), 13., p.green);
+                                    text(ui, format!("10th: {:+.1}%  ·  Median: {:+.1}%  ·  90th: {:+.1}%  (anchor {})", f.band.low * 100., f.band.mid * 100., f.band.high * 100., price(f.anchor_price)), 12., p.text);
+                                }
+                                Err(err) => {
+                                    text(ui, err, 12., p.red);
+                                }
+                            }
+                        });
+                        ui.add_space(8.);
+                    }
                     Frame::new().fill(alpha(p.blue, 12)).corner_radius(9).inner_margin(12).show(ui, |ui| {
                         small_title(ui, "RECOMMENDED START", p);
                         text(ui, "TimesFM 3.0 · Latest Google release", 17., p.text);
@@ -2760,9 +2856,9 @@ impl MarketApp {
                     text(ui, "Reserve later dates for testing. Train or tune only on earlier data, leave a gap for overlapping target windows, and use only news and fundamentals known at each forecast date. Compare against an unchanged-price forecast and a simple shared model, then evaluate simulated returns after fees and spreads. Report uncertainty by ticker and horizon.", 12., p.muted);
                     ui.add_space(12.); ui.separator(); ui.add_space(10.);
                     small_title(ui, "WHAT RUNS IN TENERUS TODAY", p);
-                    text(ui, "AI research + prediction logbook · Available", 14., p.text);
-                    text(ui, "TimesFM · Not connected    /    Ticker training · Not active", 12., p.blue);
-                    text(ui, "The learning memory supplies past reviewed calls as context. No model weights are trained, no TimesFM forecast has been run, and no predictive improvement has been established. The comparisons below measure existing AI decisions only.", 12., p.muted);
+                    text(ui, "Self-calibrating Outlook ensemble + Calibration Logbook + Opt-in local TimesFM bridge", 14., p.text);
+                    text(ui, "Outlook · 4-model conformal ensemble (active)    /    Local TimesFM · Opt-in pilot", 12., p.blue);
+                    text(ui, "Outlook runs four strictly causal local models (kernel-weighted multivariable analogs, online L2 quantile regression, EWMA fat-tailed volatility, and baseline) blended by out-of-sample pinball loss with split-conformal calibration. AI learning memory supplies empirical calibration buckets (Brier/ECE) and same-ticker reviewed outcomes as prompt context (no LLM weight retraining).", 12., p.muted);
                     ui.add_space(10.);
                     self.model_comparisons(ui, p, true);
                     ui.add_space(12.);

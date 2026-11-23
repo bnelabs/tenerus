@@ -200,7 +200,15 @@ fn parse_twelve(data: &Value, ticker: &str, fetched: i64) -> Result<History, Str
         .ok_or("Twelve Data did not return daily closes.")?;
     let closes = rows
         .iter()
-        .map(|row| read_close(row["datetime"].as_str().unwrap_or_default(), &row["close"]))
+        .map(|row| {
+            read_close_ohlcv(
+                row["datetime"].as_str().unwrap_or_default(),
+                &row["close"],
+                &row["high"],
+                &row["low"],
+                &row["volume"],
+            )
+        })
         .collect::<Result<_, _>>()?;
     completed_history(ticker, currency, fetched, closes, true)
 }
@@ -224,7 +232,15 @@ fn parse_alpha(
     )?;
     let closes = series
         .iter()
-        .map(|(date, row)| read_close(date, &row["5. adjusted close"]))
+        .map(|(date, row)| {
+            read_close_ohlcv(
+                date,
+                &row["5. adjusted close"],
+                &Value::Null,
+                &Value::Null,
+                &row["6. volume"],
+            )
+        })
         .collect::<Result<_, _>>()?;
     completed_history(ticker, currency.into(), fetched, closes, true)
 }
@@ -240,7 +256,15 @@ fn parse_custom(body: &str, ticker: &str, currency: &str, fetched: i64) -> Resul
             .ok_or("JSON needs a prices array.")?;
         let closes = rows
             .iter()
-            .map(|row| read_close(row["date"].as_str().unwrap_or_default(), &row["close"]))
+            .map(|row| {
+                read_close_ohlcv(
+                    row["date"].as_str().unwrap_or_default(),
+                    &row["close"],
+                    &row["high"],
+                    &row["low"],
+                    &row["volume"],
+                )
+            })
             .collect::<Result<_, _>>()?;
         return completed_history(ticker, currency, fetched, closes, false);
     }
@@ -253,6 +277,9 @@ fn parse_custom(body: &str, ticker: &str, currency: &str, fetched: i64) -> Resul
     };
     let date = column(&["date", "timestamp", "datetime"]).ok_or("CSV needs a date column.")?;
     let close = column(&["close"]).ok_or("CSV needs a close column.")?;
+    let high_col = column(&["high"]);
+    let low_col = column(&["low"]);
+    let volume_col = column(&["volume"]);
     let symbol = column(&["symbol", "ticker"]);
     let currency_col = column(&["currency"]);
     let mut currency = if currency.trim().is_empty() {
@@ -279,10 +306,17 @@ fn parse_custom(body: &str, ticker: &str, currency: &str, fetched: i64) -> Resul
             }
             currency = Some(reported);
         }
-        closes.push(
-            close_at(&row[date], row[close].trim().parse().unwrap_or(f64::NAN))
-                .map_err(|error| format!("CSV row {}. {error}", i + 2))?,
-        );
+        let price = row[close].trim().parse().unwrap_or(f64::NAN);
+        let opt = |col: Option<usize>| {
+            col.and_then(|c| row[c].trim().parse::<f64>().ok())
+                .filter(|v| v.is_finite() && *v > 0.)
+        };
+        let mut bar =
+            close_at(&row[date], price).map_err(|error| format!("CSV row {}. {error}", i + 2))?;
+        bar.high = opt(high_col).filter(|&h| h >= bar.price);
+        bar.low = opt(low_col).filter(|&l| l <= bar.price);
+        bar.volume = opt(volume_col);
+        closes.push(bar);
     }
     let currency = currency.ok_or("Enter a currency for CSV without a currency column.")?;
     completed_history(ticker, currency, fetched, closes, false)
@@ -324,12 +358,26 @@ fn csv_row(line: &str) -> Result<Vec<String>, String> {
     }
 }
 
-fn read_close(date: &str, close: &Value) -> Result<Close, String> {
-    let close = close
+fn opt_number(value: &Value) -> Option<f64> {
+    value
         .as_f64()
-        .or_else(|| close.as_str()?.trim().parse().ok())
-        .unwrap_or(f64::NAN);
-    close_at(date, close)
+        .or_else(|| value.as_str()?.trim().parse().ok())
+        .filter(|v| v.is_finite() && *v > 0.)
+}
+
+fn read_close_ohlcv(
+    date: &str,
+    close: &Value,
+    high: &Value,
+    low: &Value,
+    volume: &Value,
+) -> Result<Close, String> {
+    let price = opt_number(close).unwrap_or(f64::NAN);
+    let mut bar = close_at(date, price)?;
+    bar.high = opt_number(high).filter(|&h| h >= bar.price);
+    bar.low = opt_number(low).filter(|&l| l <= bar.price);
+    bar.volume = opt_number(volume);
+    Ok(bar)
 }
 
 fn close_at(date: &str, price: f64) -> Result<Close, String> {
@@ -337,7 +385,7 @@ fn close_at(date: &str, price: f64) -> Result<Close, String> {
     if !price.is_finite() || price <= 0. {
         return Err("Closing prices must be positive numbers.".into());
     }
-    Ok(Close { time, price })
+    Ok(Close::new(time, price))
 }
 
 fn date_timestamp(date: &str) -> Option<i64> {

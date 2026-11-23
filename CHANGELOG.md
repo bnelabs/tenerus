@@ -8,6 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.7.0] — 2026-11-23
+
+Major quantitative modeling, news/event integration, self-calibration, and forecasting upgrade across **Outlook**, **AI Research**, **Local Briefings**, **Prediction Logbook**, and **Forecast Model Guide**.
+
+### Added
+- **Self-Calibrating 4-Model Outlook Ensemble (`src/scenarios.rs`):** Replaced unweighted 3-feature k-NN with a strictly causal, walk-forward ensemble combining four models blended via out-of-sample **pinball-loss Hedge weighting** and **split-conformal prediction interval calibration**:
+  1. **Kernel- & Recency-Weighted Multivariable Analogues** (5d/20d/60d momentum, volatility, 5d/20d volatility ratio, 60d drawdown, plus optional 5d/20d volume ratio and OHLC intraday range ratio).
+  2. **Online L2-Regularized Quantile Regression** trained sequentially forward-in-time on non-overlapping completed historical periods via pinball-loss AdaGrad updates.
+  3. **RiskMetrics EWMA Fat-Tailed Parametric Volatility** fan ($\lambda = 0.94$).
+  4. **Unconditional Non-Overlapping Historical Baseline** with automatic shrinkage when complex models underperform out-of-sample.
+- **OHLCV History Enrichment (`src/network.rs`, `src/market_data.rs`):** Parsed daily `high`, `low`, and `volume` alongside closing prices from Yahoo Finance, Twelve Data, Alpha Vantage, JSON, and CSV imports (100% backwards-compatible with close-only files).
+- **Local News Sentiment & Event-Risk Analyzer (`src/news_signal.rs`):** Deterministic, zero-dependency headline polarity scorer (with negation handling), topic/event tagger (`Earnings`, `Guidance`, `Analyst`, `M&A / Capital`, `Legal / Regulatory`, `Macro / Policy`), and **earnings-in-horizon gap-risk detector**. Surfaced in the Outlook rail, Local Assistant Briefings (`E7` evidence), AI Research prompts, and exported reports.
+- **Confidence Calibration & Return Quality Engine (`src/journal.rs`, `src/ui.rs`):** Added **Brier Score**, **Expected Calibration Error (ECE)**, stated-vs-actual confidence calibration buckets (`0–49%`, `50–69%`, `70–84%`, `85–100%`), mean realized returns per decision (`BUY` / `SELL` / `WAIT`), and same-ticker-prioritized `LearningContext` calibration feedback.
+- **Full-Window Quant Context & Outlook Bridge for AI Research (`src/network.rs`):** Eliminated the 40-bar truncation blind spot by supplying full-window multi-horizon returns (5/20/60/120/full bars), realized volatility, max drawdown, 50/200-bar SMA distance, volume ratio, downsampled full-range checkpoints, calibrated Outlook ensemble bands (`outlook_quant_model`), and structured `news_and_event_signal`.
+- **Opt-In Local TimesFM Inference Bridge (`src/forecast.rs`, `src/ui.rs`):** Wired an explicit, user-triggered local Python worker (`Run local TimesFM pilot`) that pipes strictly numeric closing prices over `stdin` to a user-installed `timesfm` runtime and returns 10th/50th/90th quantile projections without bundling or auto-downloading weights.
+
+### Changed
+- **Walk-Forward Evaluation & Exports:** Expanded walk-forward evaluation up to 36 non-overlapping dates, added proper probabilistic scoring (**Pinball Loss** & **Pinball Skill %** vs. baseline), and included ensemble weights, conformal adjustment, match weights, component pinball losses, and news/event signals in `.xlsx`, `.pdf`, and `.docx` reports.
+
+---
+
 ## [0.6.0] — 2026-11-23
 
 Full multi-platform desktop release expanding Tenerus beyond macOS to **Windows (x86_64 & ARM64)**, **Linux (Ubuntu, Fedora, and Arch Linux — x86_64 & ARM64)**, and **FreeBSD (amd64)**.
@@ -77,4 +98,5 @@ First public-ready **Tenerus** release with native macOS branding, custom app ic
 ### Added
 - Initial native desktop market workspace in **Rust + `egui` / `eframe`** featuring watchlists, interactive price charts (`1D`–`ALL`), public Yahoo Finance quotes and news feeds, offline demonstration mode, and deterministic screenshot capture.
 
+[0.7.0]: https://github.com/bnelabs/tenerus/releases/tag/v0.7.0
 [0.6.0]: https://github.com/bnelabs/tenerus/releases/tag/v0.6.0

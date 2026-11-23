@@ -11,6 +11,7 @@ mod market_data;
 mod mechanics;
 mod model;
 mod network;
+mod news_signal;
 mod report_export;
 mod scenarios;
 mod ui;

@@ -194,29 +194,68 @@ impl Report {
 
         let results = report.section("Historical Scenarios");
         let band = scenario.end();
+        let cal = scenario.calibration;
         results.number("Comparable periods", scenario.matches.len() as f64);
         results.number(
             "Comparable periods ending higher",
             scenario.up_count() as f64,
         );
-        results.percent("10th percentile return", band.low);
-        results.percent("Median return", band.mid);
-        results.percent("90th percentile return", band.high);
+        results.percent("10th percentile return (calibrated)", band.low);
+        results.percent("Median return (calibrated)", band.mid);
+        results.percent("90th percentile return (calibrated)", band.high);
+        results.text(
+            "Self-calibrating ensemble weights",
+            format!(
+                "Kernel analogs {:.0}% ({:.1} effective) · Online QR {:.0}% · EWMA volatility {:.0}% · Baseline {:.0}%",
+                cal.weights.analogs * 100.,
+                cal.effective_matches,
+                cal.weights.online_qr * 100.,
+                cal.weights.ewma * 100.,
+                cal.weights.baseline * 100.,
+            ),
+        );
+        results.percent("Split-conformal interval adjustment", cal.conformal_delta);
         results.text(
             "Method",
-            "The range describes comparable historical periods selected using momentum, volatility, and distance from a recent high.",
+            "Self-calibrating 4-model walk-forward ensemble combining kernel/recency-weighted multivariable analogues, online L2-regularized quantile regression, EWMA fat-tailed volatility, and unconditional baseline with split-conformal interval calibration.",
         );
 
         if let Some(trials) = trials.filter(|trials| !trials.is_empty()) {
-            let checks = report.section("Historical Evaluation");
+            let checks = report.section("Walk-Forward Evaluation");
             checks.number("Earlier dates evaluated", trials.len() as f64);
             checks.number(
-                "Ends inside similar periods range",
+                "Ends inside calibrated ensemble range",
                 trials.iter().filter(|r| r.inside).count() as f64,
             );
             checks.number(
-                "Ends inside all periods range",
+                "Ends inside pre-conformal ensemble range",
+                trials.iter().filter(|r| r.raw_inside).count() as f64,
+            );
+            checks.number(
+                "Ends inside unconditional baseline range",
                 trials.iter().filter(|r| r.baseline_inside).count() as f64,
+            );
+            checks.percent(
+                "Calibrated ensemble mean pinball loss",
+                trials.iter().map(|r| r.pinball_loss).sum::<f64>() / trials.len() as f64,
+            );
+            checks.percent(
+                "Unconditional baseline mean pinball loss",
+                trials.iter().map(|r| r.baseline_pinball_loss).sum::<f64>() / trials.len() as f64,
+            );
+            checks.text(
+                "Component model pinball losses",
+                format!(
+                    "Analogs {:.2} pp · Online QR {:.2} pp · EWMA {:.2} pp · Baseline {:.2} pp (raw coverage {}/{}, baseline {}/{})",
+                    cal.analog_pinball * 100.,
+                    cal.online_qr_pinball * 100.,
+                    cal.ewma_pinball * 100.,
+                    cal.baseline_pinball * 100.,
+                    cal.raw_covered,
+                    cal.trial_count,
+                    cal.baseline_covered,
+                    cal.trial_count,
+                ),
             );
             checks.percent(
                 "Median forecast average error",
@@ -240,7 +279,12 @@ impl Report {
         let matches = report.section("Matched Historical Periods");
         for period in &scenario.matches {
             matches.percent(
-                &format!("{} to {}", date(period.start), date(period.end)),
+                &format!(
+                    "{} to {} (weight {:.1}%)",
+                    date(period.start),
+                    date(period.end),
+                    period.weight * 100.
+                ),
                 period.realized,
             );
         }
@@ -263,6 +307,20 @@ impl Report {
         let evidence = self.section("Briefing Evidence");
         for item in &source.evidence {
             evidence.text(&format!("{} {}", item.id, item.label), &item.fact);
+        }
+    }
+
+    pub fn add_news_signal(&mut self, signal: &crate::news_signal::NewsSignal) {
+        if !signal.has_signal() {
+            return;
+        }
+        let section = self.section("News and Event Signal");
+        section.text("Summary", signal.summary());
+        if !signal.event_tags.is_empty() {
+            section.text("Detected event tags", signal.event_tags.join(", "));
+        }
+        if !signal.top_headlines.is_empty() {
+            section.text("Recent headlines", signal.top_headlines.join("\n"));
         }
     }
 
