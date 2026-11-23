@@ -1,0 +1,35 @@
+[package]
+name = "tenerus"
+version = "0.6.0"
+edition = "2024"
+description = "Tenerus — an independent native desktop market workspace for macOS, Windows, Linux, and FreeBSD with historical scenario analysis and configurable AI research"
+license = "MIT"
+
+[dependencies]
+eframe = { version = "=0.37.0", default-features = false, features = ["default_fonts", "glow", "x11", "wayland", "accesskit", "clipboard", "links"] }
+egui = "=0.37.0"
+image = { version = "=0.25.10", default-features = false, features = ["png"] }
+serde = { version = "=1.0.229", features = ["derive", "rc"] }
+serde_json = "=1.0.154"
+roxmltree = "=0.21.2"
+url = "=2.5.8"
+winit = "=0.30.13"
+tempfile = "=3.27.0"
+crc32fast = "=1.5.4"
+
+[target.'cfg(unix)'.dependencies]
+libc = "=0.2.191"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "=3.7.0"
+rfd = { version = "=0.15.4", default-features = false }
+objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFAttributedString", "CFData", "CFDictionary", "CFString"] }
+objc2-core-graphics = { version = "=0.3.2", default-features = false, features = ["std", "CGColor", "CGContext", "CGDataConsumer", "CGPDFContext"] }
+objc2-core-text = { version = "=0.3.2", default-features = false, features = ["std", "CTFont", "CTLine", "CTStringAttributes", "CTTypesetter", "objc2-core-graphics"] }
+
+[profile.dev]
+debug = 0
+
+[profile.release]
+lto = "thin"
+strip = true

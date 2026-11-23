@@ -1,0 +1,385 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# Deny-by-default token permissions; each job declares only what it needs.
+permissions: {}
+
+jobs:
+  macos-arm64:
+    name: macOS (Apple Silicon)
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+      - name: Run test suite
+        run: cargo test --locked
+      - name: Build, sign, and verify macOS app
+        run: |
+          version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)
+          mkdir -p dist
+          sh scripts/package.sh
+          cp Tenerus-macOS.zip "dist/Tenerus-${version}-macos-arm64.zip"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-macos-arm64
+          path: dist/*.zip
+
+  windows-x86_64:
+    name: Windows (x86_64)
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - name: Run test suite
+        run: cargo test --locked --target x86_64-pc-windows-msvc
+      - name: Build release binary
+        shell: pwsh
+        run: |
+          $sep = [char]0x1f
+          $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $env:USERPROFILE ".cargo" }
+          $env:CARGO_ENCODED_RUSTFLAGS = "--remap-path-prefix=$((Get-Location).Path)=/src${sep}--remap-path-prefix=${cargoHome}=/cargo${sep}--remap-path-prefix=$($env:USERPROFILE)=/home"
+          cargo build --release --locked --target x86_64-pc-windows-msvc
+      - name: Package Windows x86_64 ZIP
+        shell: pwsh
+        run: ./scripts/package-windows.ps1 -BinaryPath target/x86_64-pc-windows-msvc/release/tenerus.exe -Arch x86_64 -OutDir dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-windows-x86_64
+          path: dist/*.zip
+
+  windows-arm64:
+    name: Windows (ARM64)
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          targets: aarch64-pc-windows-msvc
+      - name: Ensure MSVC ARM64 build tools are installed
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installPath = & $vswhere -latest -products * -property installationPath
+          $armLinker = Get-ChildItem -Path "$installPath\VC\Tools\MSVC" -Filter "link.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'Hostx64\\arm64\\' }
+          if (-not $armLinker) {
+            Write-Host "Installing MSVC ARM64 build tools..."
+            $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+            $proc = Start-Process -FilePath $installer -ArgumentList "modify", "--installPath", "`"$installPath`"", "--add", "Microsoft.VisualStudio.Component.VC.Tools.ARM64", "--quiet", "--norestart" -Wait -PassThru
+            if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
+              throw "vs_installer failed with exit code $($proc.ExitCode)"
+            }
+          }
+      - name: Build Windows ARM64 release binary
+        shell: pwsh
+        run: |
+          $sep = [char]0x1f
+          $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $env:USERPROFILE ".cargo" }
+          $env:CARGO_ENCODED_RUSTFLAGS = "--remap-path-prefix=$((Get-Location).Path)=/src${sep}--remap-path-prefix=${cargoHome}=/cargo${sep}--remap-path-prefix=$($env:USERPROFILE)=/home"
+          cargo build --release --locked --target aarch64-pc-windows-msvc
+      - name: Package Windows ARM64 ZIP
+        shell: pwsh
+        run: ./scripts/package-windows.ps1 -BinaryPath target/aarch64-pc-windows-msvc/release/tenerus.exe -Arch arm64 -OutDir dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-windows-arm64
+          path: dist/*.zip
+
+  linux-ubuntu-x86_64:
+    name: Linux — Ubuntu x86_64 (.deb & .tar.gz)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libgl1-mesa-dev libx11-dev libxkbcommon-dev libwayland-dev curl
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+      - name: Run test suite
+        run: cargo test --locked
+      - name: Build release binary
+        run: |
+          sep=$(printf '\037')
+          cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+          CARGO_ENCODED_RUSTFLAGS="--remap-path-prefix=$(pwd)=/src${sep}--remap-path-prefix=${cargo_home}=/cargo${sep}--remap-path-prefix=${HOME}=/home" \
+            cargo build --release --locked
+      - name: Package Ubuntu amd64 .deb and portable tarball
+        run: |
+          version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)
+          sh scripts/package-linux-deb.sh target/release/tenerus amd64 dist
+          stage="tenerus-${version}-linux-x86_64"
+          mkdir -p "$stage/bin" "$stage/share/applications" "$stage/share/icons/hicolor/256x256/apps" "$stage/share/doc/tenerus"
+          install -m 755 target/release/tenerus "$stage/bin/tenerus"
+          install -m 644 packaging/linux/tenerus.desktop "$stage/share/applications/tenerus.desktop"
+          install -m 644 assets/tenerus-icon-256.png "$stage/share/icons/hicolor/256x256/apps/tenerus.png"
+          install -m 644 LICENSE README.md CREDITS.md CHANGELOG.md SECURITY.md "$stage/share/doc/tenerus/"
+          tar -czf "dist/${stage}.tar.gz" "$stage"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-linux-ubuntu-x86_64
+          path: |
+            dist/*.deb
+            dist/*.tar.gz
+
+  linux-arm64:
+    name: Linux — ARM64 (.deb & .tar.gz)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install ARM64 cross-compilation toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+      - name: Cross-compile ARM64 release binary
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: |
+          sep=$(printf '\037')
+          cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+          CARGO_ENCODED_RUSTFLAGS="--remap-path-prefix=$(pwd)=/src${sep}--remap-path-prefix=${cargo_home}=/cargo${sep}--remap-path-prefix=${HOME}=/home" \
+            cargo build --release --locked --target aarch64-unknown-linux-gnu
+      - name: Package Ubuntu arm64 .deb and portable tarball
+        run: |
+          version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)
+          bin="target/aarch64-unknown-linux-gnu/release/tenerus"
+          sh scripts/package-linux-deb.sh "$bin" arm64 dist
+          stage="tenerus-${version}-linux-arm64"
+          mkdir -p "$stage/bin" "$stage/share/applications" "$stage/share/icons/hicolor/256x256/apps" "$stage/share/doc/tenerus"
+          install -m 755 "$bin" "$stage/bin/tenerus"
+          install -m 644 packaging/linux/tenerus.desktop "$stage/share/applications/tenerus.desktop"
+          install -m 644 assets/tenerus-icon-256.png "$stage/share/icons/hicolor/256x256/apps/tenerus.png"
+          install -m 644 LICENSE README.md CREDITS.md CHANGELOG.md SECURITY.md "$stage/share/doc/tenerus/"
+          tar -czf "dist/${stage}.tar.gz" "$stage"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-linux-arm64
+          path: |
+            dist/*.deb
+            dist/*.tar.gz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bin-linux-arm64
+          path: target/aarch64-unknown-linux-gnu/release/tenerus
+
+  linux-fedora:
+    name: Linux — Fedora x86_64 & ARM64 (.rpm)
+    runs-on: ubuntu-24.04
+    needs: [linux-arm64]
+    permissions:
+      contents: read
+    container:
+      image: fedora:43
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: bin-linux-arm64
+          path: prebuilt-arm64
+      - name: Install signed Fedora build dependencies and Rust
+        run: |
+          dnf install -y gcc rust cargo pkgconf-pkg-config rpm-build mesa-libGL-devel libX11-devel libxkbcommon-devel wayland-devel curl ca-certificates
+          rustc --version
+          cargo --version
+      - name: Build x86_64 release binary
+        run: |
+          sep=$(printf '\037')
+          cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+          CARGO_ENCODED_RUSTFLAGS="--remap-path-prefix=$(pwd)=/src${sep}--remap-path-prefix=${cargo_home}=/cargo${sep}--remap-path-prefix=${HOME}=/home" \
+            cargo build --release --locked
+      - name: Package Fedora x86_64 and aarch64 RPMs
+        run: |
+          version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)
+          chmod 755 prebuilt-arm64/tenerus
+          mkdir -p dist "$HOME/rpmbuild"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          rpmbuild -bb \
+            --define "_version ${version}" \
+            --define "_bin $(pwd)/target/release/tenerus" \
+            --define "_root $(pwd)" \
+            packaging/linux/tenerus.spec
+          rpmbuild -bb --target aarch64 \
+            --define "_version ${version}" \
+            --define "_bin $(pwd)/prebuilt-arm64/tenerus" \
+            --define "_root $(pwd)" \
+            packaging/linux/tenerus.spec
+          cp "$HOME"/rpmbuild/RPMS/x86_64/tenerus-*.rpm dist/
+          cp "$HOME"/rpmbuild/RPMS/aarch64/tenerus-*.rpm dist/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-linux-fedora
+          path: dist/*.rpm
+
+  linux-arch:
+    name: Linux — Arch x86_64 & ARM64 (.pkg.tar.zst)
+    runs-on: ubuntu-24.04
+    needs: [linux-arm64]
+    permissions:
+      contents: read
+    container:
+      image: archlinux:latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: bin-linux-arm64
+          path: prebuilt-arm64
+      - name: Install build dependencies
+        run: |
+          pacman -Syu --noconfirm base-devel rust libgl libx11 libxkbcommon wayland curl git
+          rustc --version
+          useradd -m builder
+      - name: Build Arch Linux x86_64 and aarch64 packages
+        run: |
+          chmod 755 prebuilt-arm64/tenerus
+          mkdir -p dist
+          chown -R builder:builder .
+          export TENERUS_SRC_ROOT="$(pwd)"
+          su -s /bin/sh -m builder <<'EOF'
+          set -eu
+          export HOME=/home/builder USER=builder LOGNAME=builder CARGO_HOME=/home/builder/.cargo
+          mkdir -p /tmp/arch-x86 /tmp/arch-arm64
+          cp "$TENERUS_SRC_ROOT/packaging/arch/PKGBUILD" /tmp/arch-x86/PKGBUILD
+          cd /tmp/arch-x86
+          makepkg -f --noconfirm
+          cp tenerus-*-x86_64.pkg.tar.zst "$TENERUS_SRC_ROOT/dist/"
+          cp /etc/makepkg.conf /tmp/makepkg-aarch64.conf
+          printf '\nCARCH="aarch64"\nCHOST="aarch64-unknown-linux-gnu"\n' >> /tmp/makepkg-aarch64.conf
+          cp "$TENERUS_SRC_ROOT/packaging/arch/PKGBUILD" /tmp/arch-arm64/PKGBUILD
+          cd /tmp/arch-arm64
+          TENERUS_PREBUILT_BIN="$TENERUS_SRC_ROOT/prebuilt-arm64/tenerus" makepkg --config /tmp/makepkg-aarch64.conf -f --noconfirm --nodeps
+          cp tenerus-*-aarch64.pkg.tar.zst "$TENERUS_SRC_ROOT/dist/"
+          EOF
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-linux-arch
+          path: dist/*.pkg.tar.zst
+
+  freebsd-amd64:
+    name: FreeBSD (amd64 .pkg & .tar.xz)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build, test, and package on FreeBSD 14
+        uses: vmactions/freebsd-vm@811efaaac0668df8bfb8308c3ec997b5ab50037b # v1.6.0
+        with:
+          release: '14'
+          usesh: true
+          mem: 6G
+          cpu: 4
+          prepare: |
+            pkg install -y rust curl pkgconf mesa-libs libX11 libxkbcommon wayland
+          run: |
+            set -eu
+            rustc --version
+            cargo test --locked
+            sep=$(printf '\037')
+            cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+            CARGO_ENCODED_RUSTFLAGS="--remap-path-prefix=$(pwd)=/src${sep}--remap-path-prefix=${cargo_home}=/cargo${sep}--remap-path-prefix=${HOME}=/home" \
+              cargo build --release --locked
+            sh scripts/package-freebsd.sh target/release/tenerus amd64 dist
+            rm -rf target
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-freebsd-amd64
+          path: |
+            dist/*.pkg
+            dist/*.tar.xz
+
+  publish-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    needs:
+      - macos-arm64
+      - windows-x86_64
+      - windows-arm64
+      - linux-ubuntu-x86_64
+      - linux-arm64
+      - linux-fedora
+      - linux-arch
+      - freebsd-amd64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download all release artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Generate SHA256SUMS.txt
+        run: |
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Extract release notes for tag
+        id: notes
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VER="${TAG#v}"
+          python3 - "$VER" <<'PY' > release-notes.md
+          import re, sys
+          ver = sys.argv[1]
+          text = open("CHANGELOG.md", encoding="utf-8").read()
+          m = re.search(rf"^## \[{re.escape(ver)}\][^\n]*\n(.*?)(?=^## \[|\Z)", text, re.M | re.S)
+          header = (
+              "> [!CAUTION]\n"
+              "> **Solely for Educational & Research Purposes — Not Financial Advice.**\n"
+              "> Do not use Tenerus, its historical scenarios, AI outlooks, or exported reports for real trading or investing decisions.\n\n"
+          )
+          body = m.group(1).strip() if m else f"Release v{ver}. See CHANGELOG.md for full details."
+          print(header + body + "\n\n---\n\nSee [CHANGELOG.md](https://github.com/bnelabs/tenerus/blob/main/CHANGELOG.md) for the full release history.")
+          PY
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "Tenerus ${TAG}" --notes-file release-notes.md
+            gh release upload "$TAG" release-assets/* --clobber
+          else
+            gh release create "$TAG" release-assets/* \
+              --title "Tenerus ${TAG}" \
+              --notes-file release-notes.md
+          fi

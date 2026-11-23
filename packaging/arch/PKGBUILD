@@ -1,0 +1,36 @@
+# Maintainer: Tenerus Contributors
+pkgname=tenerus
+pkgver=0.6.0
+pkgrel=1
+pkgdesc="Local-first desktop market workspace for educational scenario analysis and AI research"
+arch=('x86_64' 'aarch64')
+url="https://github.com/bnelabs/tenerus"
+license=('MIT')
+depends=('curl' 'gcc-libs' 'libgl' 'libx11' 'libxkbcommon' 'wayland')
+makedepends=('cargo')
+options=('!debug' '!strip')
+
+build() {
+    if [ -n "${TENERUS_PREBUILT_BIN:-}" ]; then
+        return 0
+    fi
+    local srcroot="${TENERUS_SRC_ROOT:-$startdir/../..}"
+    cd "$srcroot"
+    export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-stable}"
+    local cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+    local sep=$'\x1f'
+    CARGO_ENCODED_RUSTFLAGS="--remap-path-prefix=${srcroot}=/src${sep}--remap-path-prefix=${cargo_home}=/cargo${sep}--remap-path-prefix=${HOME}=/home" \
+        cargo build --release --locked
+}
+
+package() {
+    local srcroot="${TENERUS_SRC_ROOT:-$startdir/../..}"
+    local bin="${TENERUS_PREBUILT_BIN:-$srcroot/target/release/tenerus}"
+    install -Dm755 "$bin" "$pkgdir/usr/bin/tenerus"
+    install -Dm644 "$srcroot/packaging/linux/tenerus.desktop" "$pkgdir/usr/share/applications/tenerus.desktop"
+    install -Dm644 "$srcroot/assets/tenerus-icon-256.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/tenerus.png"
+    install -Dm644 "$srcroot/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 "$srcroot/README.md" "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm644 "$srcroot/CREDITS.md" "$pkgdir/usr/share/doc/$pkgname/CREDITS.md"
+    install -Dm644 "$srcroot/CHANGELOG.md" "$pkgdir/usr/share/doc/$pkgname/CHANGELOG.md"
+}

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Tenerus
+GenericName=Market Research Workspace
+Comment=Local-first desktop market workspace for educational historical scenario analysis and AI research
+Exec=tenerus
+Icon=tenerus
+Terminal=false
+Categories=Finance;Education;Office;
+Keywords=stocks;markets;finance;scenarios;research;education;
+StartupWMClass=Tenerus
