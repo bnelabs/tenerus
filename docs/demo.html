@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tenerus Live Browser Demo — Self-Calibrating 4-Model Market Scenarios</title>
+  <meta name="description" content="Try Tenerus directly in your browser on desktop or mobile. Runs the real 4-model self-calibrating Outlook engine (GARCH(1,1), Online QR, Kernel Analogs, Split-Conformal) 100% client-side. Educational use only." />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="apple-touch-icon" href="icon.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#194b39" />
+  <script>
+    (function () {
+      try {
+        var s = localStorage.getItem("tenerus-site-theme");
+        var t = (s === "light" || s === "dark")
+          ? s
+          : (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="demo.css" />
+</head>
+<body>
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="index.html">
+        <img src="icon.png" alt="Tenerus icon" width="30" height="30" />
+        <span>Tenerus</span>
+        <span class="version-pill">Web Demo</span>
+      </a>
+
+      <nav class="nav-links" aria-label="Demo Navigation">
+        <a href="index.html">Overview</a>
+        <a href="index.html#how-it-works">How It Works</a>
+        <a href="index.html#download">Desktop App</a>
+      </nav>
+
+      <div class="nav-actions">
+        <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle theme" title="Toggle theme"></button>
+        <button id="quick-upload-btn" class="btn btn-secondary btn-sm demo-nav-hide" type="button">Upload CSV</button>
+        <a class="btn btn-primary btn-sm" href="index.html#download">Desktop App</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="demo-main">
+    <div class="container">
+      <!-- Provenance & Educational Ribbon -->
+      <div class="provenance-bar" role="note">
+        <span id="prov-badge" class="prov-badge">● SAMPLE DATA · Simulated 10y daily closes (runs 100% locally in your browser)</span>
+        <span class="prov-caution">Educational &amp; research only — not financial advice</span>
+      </div>
+
+      <!-- Ticker Strip -->
+      <div id="ticker-strip" class="ticker-strip" role="tablist" aria-label="Select ticker"></div>
+
+      <!-- Main Workspace -->
+      <div class="workspace-grid">
+        <!-- LEFT: OUTLOOK FAN CHART & SELF-CALIBRATION -->
+        <section class="ws-card" aria-label="Outlook scenario workspace">
+          <div class="ws-header">
+            <div>
+              <h1 id="ws-name" class="ws-title">NVIDIA Corporation</h1>
+              <div class="ws-quote-row">
+                <span id="ws-price" class="ws-price">$186.52</span>
+                <span id="ws-delta" class="ws-delta pos">+2.34%</span>
+                <span id="ws-sub" class="ws-sub">NVDA · Simulated sample data</span>
+              </div>
+            </div>
+            <div class="seg-group" role="tablist" aria-label="Detail depth">
+              <button class="seg-btn" type="button" data-depth="beginner">Beginner</button>
+              <button class="seg-btn active" type="button" data-depth="expert">Expert</button>
+              <button class="seg-btn" type="button" data-depth="market-god">Market god</button>
+            </div>
+          </div>
+
+          <div class="controls-row">
+            <strong style="font-size: 15px;">What could happen next?</strong>
+            <div class="seg-group" role="tablist" aria-label="Forecast horizon">
+              <button class="seg-btn" type="button" data-horizon="5">5 sessions</button>
+              <button class="seg-btn active" type="button" data-horizon="20">20 sessions</button>
+              <button class="seg-btn" type="button" data-horizon="60">60 sessions</button>
+            </div>
+          </div>
+
+          <!-- Market god Blind Historical Replay Bar -->
+          <div id="replay-bar" class="replay-bar hidden">
+            <label for="replay-select">Historical replay</label>
+            <select id="replay-select" class="replay-select"></select>
+            <button id="reveal-btn" class="btn btn-primary btn-sm hidden" type="button">Reveal result</button>
+            <span id="replay-result" class="replay-badge hidden"></span>
+          </div>
+
+          <p id="summary-line" class="summary-line"></p>
+          <p id="engine-error" class="status-msg err hidden"></p>
+
+          <!-- Interactive Touch + Mouse Fan Chart -->
+          <div id="chart-box" class="chart-box">
+            <svg id="fan-svg" class="chart-svg" viewBox="0 0 760 320" role="img" aria-label="Interactive historical scenario fan chart"></svg>
+            <div id="chart-tooltip" class="chart-tooltip"></div>
+          </div>
+
+          <div id="chart-legend" class="chart-legend">
+            <span class="legend-item"><span class="legend-swatch" style="background: var(--text);"></span>Historical closes</span>
+            <span class="legend-item"><span class="legend-swatch" style="background: var(--accent-stroke); opacity: 0.45; height: 8px;"></span>Calibrated 80% ensemble band</span>
+            <span id="legend-realized" class="legend-item hidden"><span class="legend-swatch" style="background: #7c52a3;"></span>Realized path</span>
+            <span style="margin-left: auto; font-size: 11.5px; color: var(--faint);">Touch or hover chart to inspect</span>
+          </div>
+
+          <!-- 3 Outcome Cards -->
+          <div class="outcomes-grid">
+            <div class="outcome-col">
+              <div class="outcome-label">Downside</div>
+              <div id="out-low-price" class="outcome-price">—</div>
+              <div id="out-low-pct" class="outcome-pct neg">—</div>
+              <div class="outcome-sub">10th percentile (calibrated)</div>
+            </div>
+            <div class="outcome-col">
+              <div class="outcome-label">Typical</div>
+              <div id="out-mid-price" class="outcome-price">—</div>
+              <div id="out-mid-pct" class="outcome-pct">—</div>
+              <div class="outcome-sub">Median (50th percentile)</div>
+            </div>
+            <div class="outcome-col">
+              <div class="outcome-label">Upside</div>
+              <div id="out-high-price" class="outcome-price">—</div>
+              <div id="out-high-pct" class="outcome-pct pos">—</div>
+              <div class="outcome-sub">90th percentile (calibrated)</div>
+            </div>
+          </div>
+
+          <!-- Walk-Forward Self-Calibration Track Record -->
+          <div id="eval-section" class="eval-section">
+            <h2 class="eval-title">Walk-forward track record (strictly causal)</h2>
+            <div class="metrics-row">
+              <div class="metric-box">
+                <div class="metric-k">80% Coverage</div>
+                <div id="m-coverage" class="metric-v">—</div>
+                <div id="m-coverage-sub" class="metric-d">—</div>
+              </div>
+              <div class="metric-box">
+                <div class="metric-k">Pinball Loss &amp; Skill</div>
+                <div id="m-pinball" class="metric-v">—</div>
+                <div id="m-pinball-sub" class="metric-d">—</div>
+              </div>
+              <div class="metric-box">
+                <div class="metric-k">Conformal &amp; MAE</div>
+                <div id="m-conformal" class="metric-v">—</div>
+                <div id="m-mae-sub" class="metric-d">—</div>
+              </div>
+            </div>
+
+            <div class="eval-title" style="font-size: 13px; margin-bottom: 4px;">Self-calibrating Hedge weights &amp; component pinball loss</div>
+            <div id="weights-list" class="weights-list"></div>
+            <div id="setup-strip" class="setup-strip"></div>
+          </div>
+
+          <!-- Market god Tail Stress Slider -->
+          <div id="stress-box" class="stress-box hidden">
+            <div class="stress-header">
+              <span>Stress a closing return</span>
+              <span id="stress-val" style="font-family: var(--font-mono);">-8.0%</span>
+            </div>
+            <input id="stress-slider" class="stress-range" type="range" min="-50" max="50" step="0.5" value="-8" aria-label="Stress closing return percentage" />
+            <p id="stress-summary" class="status-msg" style="margin-top: 6px;"></p>
+          </div>
+        </section>
+
+        <!-- RIGHT RAIL: WATCH LEVELS, NEWS SANDBOX, EVIDENCE PACK & DATA IMPORT -->
+        <aside aria-label="Tools and context rail">
+          <!-- What to Watch + Similar Periods -->
+          <div class="ws-card">
+            <h2 class="rail-heading">What to watch</h2>
+            <div class="watch-pair">
+              <div class="watch-tile">
+                <span>Below (10th)</span>
+                <strong id="watch-low" class="neg">—</strong>
+              </div>
+              <div class="watch-tile">
+                <span>Above (90th)</span>
+                <strong id="watch-high" class="pos">—</strong>
+              </div>
+            </div>
+            <p id="watch-note" class="status-msg" style="margin-top: 0;"></p>
+            <div class="analog-list">
+              <div style="font-size: 12.5px; font-weight: 700; margin-bottom: 4px;">Closest past periods</div>
+              <div id="analog-rows"></div>
+            </div>
+          </div>
+
+          <!-- Local Headline Tone & Event-Risk Sandbox -->
+          <div class="ws-card">
+            <h2 class="rail-heading">Headline tone &amp; event risk</h2>
+            <p class="status-msg" style="margin: 0 0 8px;">
+              Type or paste headlines below (1 per line) to test Tenerus's local zero-API polarity scorer, negation rules, and earnings gap detector.
+            </p>
+            <textarea id="news-input" class="field-textarea" aria-label="Headlines to analyze"></textarea>
+            <div class="inline-field">
+              <label for="earnings-days">Next earnings (days):</label>
+              <input id="earnings-days" class="field-input" type="number" min="0" max="365" placeholder="e.g. 12" />
+            </div>
+            <div id="news-output"></div>
+          </div>
+
+          <!-- Evidence Pack for AI Apps + Optional BYO AI Key -->
+          <div class="ws-card">
+            <h2 class="rail-heading">Use with your AI assistant</h2>
+            <p class="status-msg" style="margin: 0 0 10px;">
+              Copy Tenerus's exact <code>E1–E7</code> evidence pack to paste into <strong>ChatGPT</strong>, <strong>Claude</strong>, <strong>Codex</strong>, or <strong>Antigravity</strong> on mobile or desktop.
+            </p>
+            <button id="copy-evidence-btn" class="btn btn-primary btn-sm" style="width: 100%;" type="button">Copy E1–E7 Evidence Pack</button>
+            <p id="copy-evidence-status" class="status-msg ok hidden"></p>
+
+            <details class="small-details">
+              <summary>Optional: Run directly with your own API key</summary>
+              <div class="form-stack">
+                <p class="status-msg" style="margin: 0;">
+                  Calls your chosen CORS-enabled HTTPS endpoint directly from this browser tab. Keys stay in memory only and vanish when you close the tab.
+                </p>
+                <select id="ai-preset" class="replay-select" aria-label="AI provider preset">
+                  <option value="gemini">Google Gemini (gemini-2.5-flash)</option>
+                  <option value="openai">OpenAI-compatible (/v1/chat/completions)</option>
+                  <option value="openrouter">OpenRouter (CORS-friendly)</option>
+                </select>
+                <input id="ai-endpoint" class="field-input" type="url" placeholder="Endpoint URL" />
+                <input id="ai-model" class="field-input" type="text" placeholder="Model ID" />
+                <input id="ai-key" class="field-input" type="password" placeholder="API key (session RAM only)" autocomplete="off" />
+                <button id="ai-run-btn" class="btn btn-secondary btn-sm" type="button">Generate structured read</button>
+                <div id="ai-status" class="status-msg hidden"></div>
+                <div id="ai-output" class="ai-output hidden"></div>
+              </div>
+            </details>
+          </div>
+
+          <!-- Upload CSV/JSON + Optional Twelve Data / Alpha Vantage -->
+          <div class="ws-card">
+            <h2 class="rail-heading">Bring your own price data</h2>
+            <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Upload CSV or JSON daily closes">
+              <p><strong>Drop CSV or JSON here</strong> or tap to browse</p>
+              <p style="font-size: 11.5px; margin-top: 4px;">Needs Date + Close (optional High, Low, Volume). Processed locally—never uploaded.</p>
+            </div>
+            <input id="file-input" type="file" accept=".csv,.json,.txt" class="hidden" />
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+              <button id="download-csv-tpl" class="btn btn-secondary btn-sm" style="font-size: 11.5px; padding: 4px 9px;" type="button">Sample CSV template</button>
+              <span id="upload-status" class="status-msg" style="margin: 0;"></span>
+            </div>
+
+            <details class="small-details">
+              <summary>Optional: Fetch live closes (Twelve Data / Alpha Vantage)</summary>
+              <div class="form-stack">
+                <p class="status-msg" style="margin: 0;">
+                  Uses your own free API key directly from this browser tab (key is never saved).
+                </p>
+                <select id="feed-provider" class="replay-select" aria-label="Live market data provider">
+                  <option value="twelvedata">Twelve Data (daily OHLCV)</option>
+                  <option value="alphavantage">Alpha Vantage (TIME_SERIES_DAILY)</option>
+                </select>
+                <input id="feed-ticker" class="field-input" type="text" placeholder="Ticker (e.g. AAPL, MSFT, SPY)" />
+                <input id="feed-key" class="field-input" type="password" placeholder="Provider API key (session only)" autocomplete="off" />
+                <button id="feed-fetch-btn" class="btn btn-secondary btn-sm" type="button">Fetch &amp; analyze live closes</button>
+                <div id="feed-status" class="status-msg hidden"></div>
+              </div>
+            </details>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div><strong>Tenerus Web Demo</strong> · Exact port of v0.8.0 Rust engine · Runs 100% locally in browser</div>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="index.html#download">Desktop App (macOS / Win / Linux / FreeBSD)</a>
+        <a href="https://github.com/bnelabs/tenerus" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="engine.js"></script>
+  <script src="demo-ui.js"></script>
+</body>
+</html>
