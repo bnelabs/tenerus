@@ -3,7 +3,8 @@
   <h1>Tenerus</h1>
   <p><strong>A local-first native desktop market research &amp; self-calibrating scenario workspace in Rust — for macOS, Windows, Linux, and FreeBSD.</strong></p>
   <p>
-    <a href="https://github.com/bnelabs/tenerus/releases"><img src="https://img.shields.io/badge/release-v0.8.0-194b39?style=flat-square" alt="Release v0.8.0" /></a>
+    <a href="https://bnelabs.github.io/tenerus/"><img src="https://img.shields.io/badge/website-bnelabs.github.io%2Ftenerus-194b39?style=flat-square" alt="Tenerus Website" /></a>
+    <a href="https://github.com/bnelabs/tenerus/releases"><img src="https://img.shields.io/badge/release-v0.8.0-246b51?style=flat-square" alt="Release v0.8.0" /></a>
     <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20(x64%2FARM64)%20%7C%20Linux%20(x64%2FARM64)%20%7C%20FreeBSD-182d26?style=flat-square" alt="Supported Platforms" />
     <img src="https://img.shields.io/badge/Rust%20%2B%20egui-137%20tests-27674f?style=flat-square" alt="Rust + egui · 137 tests" />
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-54675e?style=flat-square" alt="MIT License" /></a>
